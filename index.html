@@ -1,0 +1,1393 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#02040b">
+<title>Mapa del Cielo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2306102a'/%3E%3Cpath d='M32 10l4 14 14 4-14 4-4 14-4-14-14-4 14-4z' fill='%23ffe9b0'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#02040b; --glass:rgba(14,22,44,.62); --glass-strong:rgba(14,22,44,.86);
+  --line:rgba(160,190,255,.18); --text:#e9eefc; --muted:#9aa8c9; --accent:#ffd27a; --accent2:#8fb4ff;
+}
+body.night{
+  --glass:rgba(30,0,0,.6); --glass-strong:rgba(30,0,0,.88); --line:rgba(255,40,40,.25);
+  --text:#ff5a4a; --muted:#b33a30; --accent:#ff6a50; --accent2:#e0453a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+canvas#sky{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:block}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+
+/* ---------- Pantalla inicial ---------- */
+#intro{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:32px 24px calc(32px + env(safe-area-inset-bottom));
+  background:radial-gradient(ellipse at 50% 115%,rgba(60,90,170,.55),transparent 60%),
+             radial-gradient(ellipse at 50% -10%,rgba(40,30,90,.5),transparent 60%),#02040b;
+  transition:opacity .6s ease}
+#intro.hide{opacity:0;pointer-events:none}
+#intro .stars{position:absolute;inset:0;pointer-events:none;opacity:.8}
+#intro h1{position:relative;font-weight:250;font-size:clamp(34px,9vw,54px);letter-spacing:.06em;margin:0 0 6px}
+#intro h1 b{font-weight:600;color:var(--accent)}
+#intro p{position:relative;color:var(--muted);max-width:420px;line-height:1.5;margin:8px 0}
+#start{position:relative;margin-top:30px;font-size:22px;font-weight:600;letter-spacing:.04em;padding:20px 64px;border-radius:999px;
+  color:#0b1020;background:linear-gradient(135deg,#ffe3a3,#ffb860);box-shadow:0 10px 40px rgba(255,190,90,.35),0 0 0 1px rgba(255,255,255,.2) inset}
+#start:active{transform:scale(.97)}
+#intro small{position:relative;color:var(--muted);opacity:.75;margin-top:22px;font-size:13px;max-width:380px;line-height:1.45}
+
+/* ---------- Barra superior ---------- */
+#top{position:fixed;left:0;right:0;top:0;z-index:10;padding:calc(10px + env(safe-area-inset-top)) 12px 0;pointer-events:none}
+.searchbox{pointer-events:auto;display:flex;align-items:center;gap:8px;background:var(--glass);border:1px solid var(--line);
+  border-radius:16px;padding:0 12px;height:46px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);max-width:560px;margin:0 auto}
+.searchbox svg{flex:none;opacity:.7}
+#q{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font-size:16px;height:100%}
+#q::placeholder{color:var(--muted)}
+#qclear{display:none;font-size:20px;color:var(--muted);padding:6px}
+#results{pointer-events:auto;max-width:560px;margin:6px auto 0;background:var(--glass-strong);border:1px solid var(--line);border-radius:14px;
+  overflow:auto;max-height:46vh;display:none;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#results button{display:flex;width:100%;text-align:left;padding:12px 14px;gap:10px;align-items:center;border-bottom:1px solid var(--line)}
+#results button:last-child{border-bottom:0}
+#results .k{margin-left:auto;font-size:12px;color:var(--muted)}
+#status{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px;text-shadow:0 1px 4px #000;letter-spacing:.02em}
+#status b{color:var(--text);font-weight:500}
+
+/* ---------- Controles inferiores ---------- */
+#bottom{position:fixed;left:0;right:0;bottom:0;z-index:10;padding:0 10px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
+.panel{pointer-events:auto;max-width:560px;margin:0 auto;background:var(--glass);border:1px solid var(--line);border-radius:20px;
+  padding:10px 12px 8px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.timerow{display:flex;align-items:center;gap:10px}
+#tlabel{font-size:13px;min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tlabel span{color:var(--muted)}
+#trange{width:100%;margin:8px 0 6px;accent-color:var(--accent);height:28px}
+.btns{display:flex;justify-content:space-between;gap:4px}
+.btns button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:12px;font-size:11px;color:var(--muted)}
+.btns button .i{font-size:19px;line-height:22px;color:var(--text)}
+.btns button.on{background:rgba(255,210,122,.14);color:var(--accent)}
+body.night .btns button.on{background:rgba(255,60,40,.15)}
+.chip{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--text)}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- Ficha de información ---------- */
+#card{position:fixed;left:10px;right:10px;z-index:20;bottom:calc(150px + env(safe-area-inset-bottom));max-width:540px;margin:0 auto;
+  background:var(--glass-strong);border:1px solid var(--line);border-radius:20px;padding:16px 18px 16px;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 18px 50px rgba(0,0,0,.5);
+  transform:translateY(20px);opacity:0;pointer-events:none;transition:.25s ease}
+#card.show{transform:none;opacity:1;pointer-events:auto}
+#card h2{margin:0 34px 2px 0;font-size:22px;font-weight:600}
+#card .sub{color:var(--accent2);font-size:13px;margin-bottom:10px}
+#card .facts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-bottom:10px}
+#card .facts b{color:var(--text);font-weight:500}
+#card p{margin:0;line-height:1.5;font-size:14.5px}
+#card .x{position:absolute;right:10px;top:10px;width:34px;height:34px;border-radius:50%;font-size:20px;color:var(--muted);background:rgba(255,255,255,.06)}
+#card .go{margin-top:12px;font-size:13px;padding:8px 14px;border-radius:999px;background:rgba(255,210,122,.15);color:var(--accent)}
+
+body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:grayscale(1) sepia(1) saturate(8) hue-rotate(-45deg) brightness(.8)}
+#layers{position:fixed;right:10px;z-index:21;bottom:calc(150px + env(safe-area-inset-bottom));background:var(--glass-strong);border:1px solid var(--line);
+  border-radius:16px;padding:12px;display:none;flex-direction:column;gap:8px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#layers.show{display:flex}
+#layers label{display:flex;align-items:center;gap:10px;font-size:14px;padding:4px 2px}
+#layers input{width:20px;height:20px;accent-color:var(--accent)}
+
+#toast{position:fixed;left:50%;top:calc(120px + env(safe-area-inset-top));transform:translate(-50%,-8px);z-index:30;max-width:88vw;
+  background:var(--glass-strong);border:1px solid var(--line);border-radius:14px;padding:10px 16px;font-size:14px;text-align:center;
+  opacity:0;transition:.3s;pointer-events:none;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media (min-width:700px){#card{right:auto;left:20px;bottom:24px;width:380px}#layers{bottom:24px;right:20px}}
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+
+<div id="intro">
+  <canvas class="stars" id="introStars"></canvas>
+  <h1>Mapa del <b>Cielo</b></h1>
+  <p>Apunta tu celular al cielo y descubre qué estrellas, constelaciones y planetas estás mirando, en tiempo real.</p>
+  <button id="start">Comenzar</button>
+  <small>Te pediremos acceso a tu ubicación y a los sensores de movimiento. Si no das la ubicación, usaremos Villa Alemana, Chile.</small>
+</div>
+
+<div id="top">
+  <div class="searchbox">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" type="search" placeholder="Buscar: Júpiter, Cruz del Sur, Sirio…" autocomplete="off" enterkeyhint="search">
+    <button id="qclear" aria-label="Borrar">×</button>
+  </div>
+  <div id="results"></div>
+  <div id="status"></div>
+</div>
+
+<div id="card"><button class="x" aria-label="Cerrar">×</button><div id="cardBody"></div></div>
+
+<div id="layers">
+  <label><input type="checkbox" id="lyConst" checked> Constelaciones</label>
+  <label><input type="checkbox" id="lyNames" checked> Nombres</label>
+  <label><input type="checkbox" id="lyMW" checked> Vía Láctea</label>
+  <label><input type="checkbox" id="lyGrid"> Cuadrícula de altura</label>
+</div>
+
+<div id="bottom">
+  <div class="panel">
+    <div class="timerow">
+      <div id="tlabel">—</div>
+      <button class="chip" id="now">Ahora</button>
+      <button class="chip" id="play" aria-label="Reproducir">▶ Acelerar</button>
+    </div>
+    <input id="trange" type="range" min="-720" max="720" step="5" value="0" aria-label="Adelantar o retroceder el tiempo">
+    <div class="btns">
+      <button id="bSensor"><span class="i">🧭</span><span>Sensores</span></button>
+      <button id="bNight"><span class="i">🔴</span><span>Modo noche</span></button>
+      <button id="bLayers"><span class="i">✨</span><span>Capas</span></button>
+      <button id="bZoomOut"><span class="i">－</span><span>Alejar</span></button>
+      <button id="bZoomIn"><span class="i">＋</span><span>Acercar</span></button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<!-- =================== Cálculos astronómicos (sin DOM, se prueban con tools/test_astro.mjs) =================== -->
+<script id="astro">
+const Astro = (() => {
+  const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+  const sin = Math.sin, cos = Math.cos;
+  const n360 = x => ((x % 360) + 360) % 360;
+
+  const julian = date => date.getTime() / 86400000 + 2440587.5;
+  // Siglos julianos (Tiempo Terrestre ≈ UTC + 69 s) desde J2000.0
+  const centuries = date => (julian(date) + 69.2 / 86400 - 2451545.0) / 36525;
+
+  // Tiempo sidéreo medio de Greenwich (grados), IAU 1982
+  function gmst(date) {
+    const d = julian(date) - 2451545.0, T = d / 36525;
+    return n360(280.46061837 + 360.98564736629 * d + 0.000387933 * T * T - T * T * T / 38710000);
+  }
+
+  const radecToVec = (ra, dec) => {
+    const a = ra * D2R, d = dec * D2R;
+    return [cos(d) * cos(a), cos(d) * sin(a), sin(d)];
+  };
+  const vecToRadec = v => {
+    const r = Math.hypot(v[0], v[1], v[2]);
+    return [n360(Math.atan2(v[1], v[0]) * R2D), Math.asin(v[2] / r) * R2D];
+  };
+  const mulMV = (m, v) => [
+    m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+    m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+    m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+
+  // Precesión IAU 1976 (Lieske): J2000 -> ecuador medio de la fecha
+  function precessionMatrix(T) {
+    const as = D2R / 3600;
+    const z0 = (2306.2181 * T + 0.30188 * T * T + 0.017998 * T * T * T) * as;
+    const z = (2306.2181 * T + 1.09468 * T * T + 0.018203 * T * T * T) * as;
+    const th = (2004.3109 * T - 0.42665 * T * T - 0.041833 * T * T * T) * as;
+    const cz0 = cos(z0), sz0 = sin(z0), cz = cos(z), sz = sin(z), ct = cos(th), st = sin(th);
+    return [
+      cz0 * ct * cz - sz0 * sz, -sz0 * ct * cz - cz0 * sz, -st * cz,
+      cz0 * ct * sz + sz0 * cz, -sz0 * ct * sz + cz0 * cz, -st * sz,
+      cz0 * st, -sz0 * st, ct];
+  }
+
+  // Ecuatorial de la fecha -> horizonte local (filas: Este, Norte, Cenit)
+  function horizonMatrix(lstDeg, latDeg) {
+    const t = lstDeg * D2R, p = latDeg * D2R;
+    const ct = cos(t), st = sin(t), cp = cos(p), sp = sin(p);
+    return [-st, ct, 0,
+      -sp * ct, -sp * st, cp,
+      cp * ct, cp * st, sp];
+  }
+
+  const obliquity = T => 23.439291 - 0.0130042 * T;
+  function eclToEq(v, epsDeg) {
+    const e = epsDeg * D2R, c = cos(e), s = sin(e);
+    return [v[0], c * v[1] - s * v[2], s * v[1] + c * v[2]];
+  }
+
+  // Sol: posición aparente de la fecha (Meeus, cap. 25, precisión ~0,01°)
+  function sun(T) {
+    const L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T * T;
+    const M = (357.52911 + 35999.05029 * T - 0.0001537 * T * T) * D2R;
+    const e = 0.016708634 - 0.000042037 * T;
+    const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * sin(M) + (0.019993 - 0.000101 * T) * sin(2 * M) + 0.000289 * sin(3 * M);
+    const nu = M + C * D2R;
+    const R = 1.000001018 * (1 - e * e) / (1 + e * cos(nu));
+    const om = (125.04 - 1934.136 * T) * D2R;
+    const lon = n360(L0 + C - 0.00569 - 0.00478 * sin(om));
+    const eps = obliquity(T) + 0.00256 * cos(om);
+    const v = eclToEq([cos(lon * D2R), sin(lon * D2R), 0], eps);
+    return { lon, dist: R, vec: v };
+  }
+
+  // Luna: teoría ELP-2000/82 truncada (Meeus, cap. 47). Error típico < 0,05°
+  const MOON_LR = [ // D, M, M', F, Σl (1e-6 °), Σr (1e-3 km)
+    [0,0,1,0,6288774,-20905355],[2,0,-1,0,1274027,-3699111],[2,0,0,0,658314,-2955968],[0,0,2,0,213618,-569925],
+    [0,1,0,0,-185116,48888],[0,0,0,2,-114332,-3149],[2,0,-2,0,58793,246158],[2,-1,-1,0,57066,-152138],
+    [2,0,1,0,53322,-170733],[2,-1,0,0,45758,-204586],[0,1,-1,0,-40923,-129620],[1,0,0,0,-34720,108743],
+    [0,1,1,0,-30383,104755],[2,0,0,-2,15327,10321],[0,0,1,2,-12528,0],[0,0,1,-2,10980,79661],
+    [4,0,-1,0,10675,-34782],[0,0,3,0,10034,-23210],[4,0,-2,0,8548,-21636],[2,1,-1,0,-7888,24208],
+    [2,1,0,0,-6766,30824],[1,0,-1,0,-5163,-8379],[1,1,0,0,4987,-16675],[2,-1,1,0,4036,-12831],
+    [2,0,2,0,3994,-10445],[4,0,0,0,3861,-11650],[2,0,-3,0,3665,14403],[0,1,-2,0,-2689,-7003],
+    [2,0,-1,2,-2602,0],[2,-1,-2,0,2390,10056],[1,0,1,0,-2348,6322],[2,-2,0,0,2236,-9884],
+    [0,1,2,0,-2120,5751],[0,2,0,0,-2069,0],[2,-2,-1,0,2048,-4950],[2,0,1,-2,-1773,4130],
+    [2,0,0,2,-1595,0],[4,-1,-1,0,1215,-3958],[0,0,2,2,-1110,0],[3,0,-1,0,-892,3258],
+    [2,1,1,0,-810,2616],[4,-1,-2,0,759,-1897],[0,2,-1,0,-713,-2117],[2,2,-1,0,-700,2354]];
+  const MOON_B = [ // D, M, M', F, Σb (1e-6 °)
+    [0,0,0,1,5128122],[0,0,1,1,280602],[0,0,1,-1,277693],[2,0,0,-1,173237],[2,0,-1,1,55413],
+    [2,0,-1,-1,46271],[2,0,0,1,32573],[0,0,2,1,17198],[2,0,1,-1,9266],[0,0,2,-1,8822],
+    [2,-1,0,-1,8216],[2,0,-2,-1,4324],[2,0,1,1,4200],[2,1,0,-1,-3359],[2,-1,-1,1,2463],
+    [2,-1,0,1,2211],[2,-1,-1,-1,2065],[0,1,-1,-1,-1870],[4,0,-1,-1,1828],[0,1,0,1,-1794],
+    [0,0,0,3,-1749],[0,1,-1,1,-1565],[1,0,0,1,-1491],[0,1,1,1,-1475],[0,1,1,-1,-1410],
+    [0,1,0,-1,-1344],[1,0,0,-1,-1335],[0,0,3,1,1107],[4,0,0,-1,1021],[4,0,-1,1,833]];
+  function moon(T) {
+    const Lp = n360(218.3164477 + 481267.88123421 * T - 0.0015786 * T * T);
+    const D = n360(297.8501921 + 445267.1114034 * T - 0.0018819 * T * T) * D2R;
+    const M = n360(357.5291092 + 35999.0502909 * T - 0.0001536 * T * T) * D2R;
+    const Mp = n360(134.9633964 + 477198.8675055 * T + 0.0087414 * T * T) * D2R;
+    const F = n360(93.2720950 + 483202.0175233 * T - 0.0036539 * T * T) * D2R;
+    const A1 = (119.75 + 131.849 * T) * D2R, A2 = (53.09 + 479264.290 * T) * D2R, A3 = (313.45 + 481266.484 * T) * D2R;
+    const E = 1 - 0.002516 * T - 0.0000074 * T * T;
+    let sl = 0, sr = 0, sb = 0;
+    for (const [d, m, mp, f, l, r] of MOON_LR) {
+      const arg = d * D + m * M + mp * Mp + f * F;
+      const ef = m === 0 ? 1 : (Math.abs(m) === 1 ? E : E * E);
+      sl += l * ef * sin(arg); sr += r * ef * cos(arg);
+    }
+    for (const [d, m, mp, f, b] of MOON_B) {
+      const ef = m === 0 ? 1 : (Math.abs(m) === 1 ? E : E * E);
+      sb += b * ef * sin(d * D + m * M + mp * Mp + f * F);
+    }
+    const LpR = Lp * D2R;
+    sl += 3958 * sin(A1) + 1962 * sin(LpR - F) + 318 * sin(A2);
+    sb += -2235 * sin(LpR) + 382 * sin(A3) + 175 * sin(A1 - F) + 175 * sin(A1 + F) + 127 * sin(LpR - Mp) - 115 * sin(LpR + Mp);
+    const om = (125.04452 - 1934.136261 * T) * D2R;
+    const lon = n360(Lp + sl / 1e6 - 0.004778 * sin(om)); // + nutación en longitud
+    const lat = sb / 1e6;
+    const dist = 385000.56 + sr / 1000; // km
+    const eps = obliquity(T) + 0.00256 * cos(om);
+    const cb = cos(lat * D2R);
+    const v = eclToEq([cb * cos(lon * D2R), cb * sin(lon * D2R), sin(lat * D2R)], eps);
+    return { lon, lat, dist, vec: v };
+  }
+
+  // Planetas: elementos keplerianos de JPL (Standish), válidos 1800–2050. [valor J2000, tasa por siglo]
+  const EL = {
+    mercurio: [[0.38709927, 0.00000037], [0.20563593, 0.00001906], [7.00497902, -0.00594749], [252.25032350, 149472.67411175], [77.45779628, 0.16047689], [48.33076593, -0.12534081]],
+    venus:    [[0.72333566, 0.00000390], [0.00677672, -0.00004107], [3.39467605, -0.00078890], [181.97909950, 58517.81538729], [131.60246718, 0.00268329], [76.67984255, -0.27769418]],
+    tierra:   [[1.00000261, 0.00000562], [0.01671123, -0.00004392], [-0.00001531, -0.01294668], [100.46457166, 35999.37244981], [102.93768193, 0.32327364], [0, 0]],
+    marte:    [[1.52371034, 0.00001847], [0.09339410, 0.00007882], [1.84969142, -0.00813131], [-4.55343205, 19140.30268499], [-23.94362959, 0.44441088], [49.55953891, -0.29257343]],
+    jupiter:  [[5.20288700, -0.00011607], [0.04838624, -0.00013253], [1.30439695, -0.00183714], [34.39644051, 3034.74612775], [14.72847983, 0.21252668], [100.47390909, 0.20469106]],
+    saturno:  [[9.53667594, -0.00125060], [0.05386179, -0.00050991], [2.48599187, 0.00193609], [49.95424423, 1222.49362201], [92.59887831, -0.41897216], [113.66242448, -0.28867794]],
+  };
+  // Posición heliocéntrica eclíptica J2000 (UA)
+  function helio(name, T) {
+    const el = EL[name].map(([v0, r]) => v0 + r * T);
+    const [a, e, I, L, wb, Om] = el;
+    const M = n360(L - wb) * D2R, w = (wb - Om) * D2R, O = Om * D2R, i = I * D2R;
+    let E = M + e * sin(M);
+    for (let k = 0; k < 8; k++) E -= (E - e * sin(E) - M) / (1 - e * cos(E));
+    const xp = a * (cos(E) - e), yp = a * Math.sqrt(1 - e * e) * sin(E);
+    const cw = cos(w), sw = sin(w), cO = cos(O), sO = sin(O), ci = cos(i), si = sin(i);
+    return [
+      (cw * cO - sw * sO * ci) * xp + (-sw * cO - cw * sO * ci) * yp,
+      (cw * sO + sw * cO * ci) * xp + (-sw * sO + cw * cO * ci) * yp,
+      (sw * si) * xp + (cw * si) * yp];
+  }
+  const H_MAG = { mercurio: -0.42, venus: -4.40, marte: -1.52, jupiter: -9.40, saturno: -8.88 };
+  // Planeta geocéntrico: vector unitario ecuatorial J2000 (con tiempo de luz), distancia y magnitud
+  function planet(name, T) {
+    const earth = helio('tierra', T);
+    let p = helio(name, T), g, dist;
+    for (let k = 0; k < 2; k++) {
+      g = [p[0] - earth[0], p[1] - earth[1], p[2] - earth[2]];
+      dist = Math.hypot(g[0], g[1], g[2]);
+      p = helio(name, T - dist * 0.0057755183 / 36525);
+    }
+    g = [p[0] - earth[0], p[1] - earth[1], p[2] - earth[2]];
+    dist = Math.hypot(g[0], g[1], g[2]);
+    const r = Math.hypot(p[0], p[1], p[2]), R = Math.hypot(earth[0], earth[1], earth[2]);
+    const i = Math.acos(Math.max(-1, Math.min(1, (r * r + dist * dist - R * R) / (2 * r * dist)))) * R2D;
+    let mag = H_MAG[name] + 5 * Math.log10(r * dist);
+    if (name === 'mercurio') mag += 0.038 * i - 0.000273 * i * i + 0.000002 * i * i * i;
+    else if (name === 'venus') mag += 0.0009 * i + 0.000239 * i * i - 0.00000065 * i * i * i;
+    else if (name === 'marte') mag += 0.016 * i;
+    else if (name === 'jupiter') mag += 0.005 * i;
+    const v = eclToEq([g[0] / dist, g[1] / dist, g[2] / dist], 23.43928);
+    return { vec: v, dist, r, mag, phase: i };
+  }
+
+  // Galácticas -> ecuatoriales J2000
+  function galToVec(l, b) {
+    const L = l * D2R, B = b * D2R, g = [cos(B) * cos(L), cos(B) * sin(L), sin(B)];
+    const M = [-0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.4448296300, 0.7469822445, -0.8676661490, -0.1980763734, 0.4559837762];
+    return [M[0] * g[0] + M[3] * g[1] + M[6] * g[2], M[1] * g[0] + M[4] * g[1] + M[7] * g[2], M[2] * g[0] + M[5] * g[1] + M[8] * g[2]];
+  }
+
+  return { D2R, R2D, n360, julian, centuries, gmst, radecToVec, vecToRadec, mulMV, precessionMatrix, horizonMatrix,
+    sun, moon, planet, helio, galToVec, obliquity };
+})();
+if (typeof module !== 'undefined') module.exports = Astro;
+</script>
+
+<script>
+/*DATA-START*/
+const STARS=[[101.287,-16.716,-1.46,98,"α","CMa","Sirius"],[95.988,-52.696,-0.72,75,"α","Car","Canopus"],[213.915,19.183,-0.04,48,"α","Boo","Arcturus"],[219.9,-60.835,-0.01,58,"α¹","Cen","Rigil Kentaurus"],[279.235,38.784,0.03,100,"α","Lyr","Vega"],[79.172,45.998,0.08,55,"α","Aur","Capella"],[78.635,-8.202,0.12,140,"β","Ori","Rigel"],[114.825,5.225,0.38,68,"α","CMi","Procyon"],[24.429,-57.237,0.46,240,"α","Eri","Achernar"],[88.793,7.407,0.5,34,"α","Ori","Betelgeuse"],[210.956,-60.373,0.61,280,"β","Cen","Hadar"],[297.696,8.868,0.77,82,"α","Aql","Altair"],[68.98,16.509,0.85,42,"α","Tau","Aldebaran"],[247.352,-26.432,0.96,34,"α","Sco","Antares"],[201.298,-11.161,0.98,280,"α","Vir","Spica"],[116.329,28.026,1.14,50,"β","Gem","Pollux"],[344.413,-29.622,1.16,92,"α","PsA","Fomalhaut"],[191.93,-59.689,1.25,300,"β","Cru","Mimosa"],[310.358,45.28,1.25,95,"α","Cyg","Deneb"],[186.65,-63.099,1.33,300,"α¹","Cru","Acrux"],[219.9,-60.836,1.33,48,"α²","Cen",""],[152.093,11.967,1.35,160,"α","Leo","Regulus"],[104.656,-28.972,1.5,260,"ε","CMa","Adhara"],[187.791,-57.113,1.63,30,"γ","Cru","Gacrux"],[263.402,-37.104,1.63,260,"λ","Sco","Shaula"],[81.283,6.35,1.64,260,"γ","Ori","Bellatrix"],[81.573,28.608,1.65,160,"β","Tau","Elnath"],[138.3,-69.717,1.68,95,"β","Car","Miaplacidus"],[84.053,-1.202,1.7,300,"ε","Ori","Alnilam"],[186.652,-63.099,1.73,280,"α²","Cru",""],[332.058,-46.961,1.74,160,"α","Gru","Alnair"],[193.507,55.96,1.77,100,"ε","UMa","Alioth"],[122.383,-47.337,1.78,141,"γ²","Vel",""],[51.081,49.861,1.79,68,"α","Per","Mirfak"],[165.932,61.751,1.79,50,"α","UMa","Dubhe"],[107.098,-26.393,1.84,63,"δ","CMa","Wezen"],[276.043,-34.385,1.85,120,"ε","Sgr","Kaus Australis"],[125.628,-59.51,1.86,46,"ε","Car","Avior"],[206.885,49.313,1.86,240,"η","UMa","Alkaid"],[264.33,-42.998,1.87,74,"θ","Sco","Sargas"],[89.882,44.947,1.9,95,"β","Aur","Menkalinan"],[252.166,-69.028,1.92,47,"α","TrA","Atria"],[99.428,16.399,1.93,100,"γ","Gem","Alhena"],[306.412,-56.735,1.94,260,"α","Pav","Peacock"],[131.176,-54.708,1.96,98,"δ","Vel",""],[95.675,-17.956,1.98,280,"β","CMa","Mirzam"],[113.65,31.888,1.98,98,"α","Gem","Castor"],[141.897,-8.659,1.98,46,"α","Hya","Alphard"],[31.793,23.462,2.0,47,"α","Ari","Hamal"],[239.876,25.92,2.0,240,"","",""],[37.953,89.264,2.02,64,"α","UMi","Polaris"],[283.816,-26.297,2.02,260,"σ","Sgr","Nunki"],[10.898,-17.987,2.04,51,"β","Cet","Diphda"],[85.19,-1.943,2.05,330,"ζ","Ori","Alnitak"],[2.097,29.091,2.06,140,"α","And","Alpheratz"],[17.433,35.621,2.06,35,"β","And","Mirach"],[86.939,-9.67,2.06,300,"κ","Ori","Saiph"],[211.671,-36.37,2.06,50,"θ","Cen","Menkent"],[222.676,74.156,2.08,44,"β","UMi","Kochab"],[263.734,12.56,2.08,88,"α","Oph","Rasalhague"],[340.667,-46.885,2.1,28,"β","Gru",""],[47.042,40.956,2.12,140,"β","Per","Algol"],[177.265,14.572,2.14,92,"β","Leo","Denebola"],[190.379,-48.96,2.17,98,"γ","Cen",""],[305.557,40.257,2.2,63,"γ","Cyg","Sadr"],[136.999,-43.432,2.21,44,"λ","Vel","Suhail"],[10.127,56.537,2.23,50,"α","Cas","Schedar"],[83.002,-0.299,2.23,330,"δ","Ori","Mintaka"],[233.672,26.715,2.23,100,"α","CrB","Alphecca"],[269.152,51.489,2.23,42,"γ","Dra","Eltanin"],[120.896,-40.003,2.25,450,"ζ","Pup","Naos"],[139.273,-59.275,2.25,80,"ι","Car","Aspidiske"],[30.975,42.33,2.26,46,"γ¹","And","Almach"],[2.295,59.15,2.27,72,"β","Cas","Caph"],[200.981,54.925,2.27,98,"ζ","UMa","Mizar"],[252.541,-34.293,2.29,47,"ε","Sco",""],[204.972,-53.466,2.3,280,"ε","Cen",""],[220.482,-47.388,2.3,280,"α","Lup",""],[218.877,-42.158,2.31,280,"η","Cen",""],[240.083,-22.622,2.32,300,"δ","Sco","Dschubba"],[165.46,56.383,2.37,98,"β","UMa","Merak"],[6.571,-42.306,2.39,50,"α","Phe","Ankaa"],[326.047,9.875,2.39,47,"ε","Peg","Enif"],[265.622,-39.03,2.41,280,"κ","Sco","Girtab"],[345.944,28.083,2.42,32,"β","Peg","Scheat"],[257.595,-15.725,2.43,95,"η","Oph","Sabik"],[178.457,53.695,2.44,100,"γ","UMa","Phecda"],[319.645,62.586,2.44,82,"α","Cep","Alderamin"],[111.024,-29.303,2.45,200,"η","CMa","Aludra"],[311.553,33.97,2.46,50,"ε","Cyg",""],[14.177,60.717,2.47,300,"γ","Cas","Navi"],[346.19,15.205,2.49,120,"α","Peg","Markab"],[140.528,-55.011,2.5,260,"κ","Vel",""],[45.57,4.09,2.53,34,"α","Cet","Menkar"],[208.885,-47.288,2.55,260,"ζ","Cen",""],[168.527,20.524,2.56,90,"δ","Leo","Zosma"],[249.29,-10.567,2.56,330,"ζ","Oph",""],[83.182,-17.822,2.58,75,"α","Lep","Arneb"],[183.952,-17.542,2.59,140,"γ","Crv","Gienah"],[182.09,-50.723,2.6,260,"δ","Cen",""],[285.653,-29.88,2.6,95,"ζ","Sgr","Ascella"],[154.993,19.842,2.61,48,"γ¹","Leo","Algieba"],[229.252,-9.383,2.61,140,"β","Lib","Zubeneschamali"],[89.93,37.213,2.62,100,"θ","Aur","Mahasim"],[241.359,-19.806,2.62,280,"β¹","Sco","Acrab"],[28.66,20.808,2.64,88,"β","Ari","Sheratan"],[84.912,-34.074,2.64,160,"α","Col","Phact"],[188.597,-23.397,2.65,55,"β","Crv","Kraz"],[236.067,6.426,2.65,47,"α","Ser","Unukalhai"],[21.454,60.235,2.68,88,"δ","Cas","Ruchbah"],[208.671,18.398,2.68,60,"η","Boo","Muphrid"],[224.633,-43.134,2.68,260,"β","Lup",""],[74.248,33.166,2.69,46,"ι","Aur","Kabdhilinan"],[161.692,-49.42,2.69,55,"μ","Vel",""],[189.296,-69.136,2.69,260,"α","Mus",""],[262.691,-37.296,2.69,260,"υ","Sco","Lesath"],[109.286,-37.098,2.7,46,"π","Pup",""],[221.247,27.074,2.7,50,"ε","Boo","Izar"],[275.249,-29.828,2.7,46,"δ","Sgr","Kaus Media"],[296.565,10.613,2.72,46,"γ","Aql","Tarazed"],[243.586,-3.694,2.74,35,"δ","Oph","Yed Prior"],[245.998,61.514,2.74,52,"η","Dra",""],[200.149,-36.712,2.75,95,"ι","Cen",""],[222.72,-16.042,2.75,92,"α²","Lib","Zubenelgenubi"],[160.739,-64.394,2.76,300,"θ","Car",""],[83.858,-5.91,2.77,330,"ι","Ori","Nair Al Saif"],[247.555,21.49,2.77,53,"β","Her","Kornephoros"],[265.868,4.567,2.77,47,"β","Oph","Cebalrai"],[233.785,-41.167,2.78,260,"γ","Lup",""],[76.963,-5.086,2.79,92,"β","Eri","Cursa"],[262.608,52.301,2.79,58,"β","Dra","Rastaban"],[6.438,-77.254,2.8,58,"β","Hyi",""],[183.786,-58.749,2.8,260,"δ","Cru",""],[121.886,-24.304,2.81,66,"ρ","Pup","Tureis"],[250.322,31.603,2.81,60,"ζ","Her",""],[276.993,-25.422,2.81,48,"λ","Sgr","Kaus Borealis"],[248.971,-28.216,2.82,300,"τ","Sco","Alniyat"],[3.309,15.184,2.83,260,"γ","Peg","Algenib"],[195.544,10.959,2.83,52,"ε","Vir","Vindemiatrix"],[82.061,-20.759,2.84,55,"β","Lep","Nihal"],[58.533,31.884,2.85,280,"ζ","Per",""],[238.785,-63.431,2.85,72,"β","TrA","Betria"],[261.325,-55.53,2.85,46,"β","Ara",""],[29.692,-61.57,2.86,75,"α","Hyi","Head of Hydrus"],[334.625,-60.26,2.86,46,"α","Tuc",""],[56.871,24.105,2.87,160,"η","Tau","Alcyone"],[296.244,45.131,2.87,120,"δ","Cyg","Al Fawaris"],[326.76,-16.127,2.87,88,"δ","Cap","Deneb Algedi"],[95.74,22.514,2.88,30,"μ","Gem","Tejat Posterior"],[113.65,31.889,2.88,95,"α","Gem",""],[59.463,40.01,2.89,300,"ε","Per",""],[229.728,-68.679,2.89,98,"γ","TrA","Gatria"],[239.713,-26.114,2.89,280,"π","Sco",""],[245.297,-25.593,2.89,280,"σ","Sco","Al Niyat"],[287.441,-21.024,2.89,72,"π","Sgr","Albaldah"],[111.788,8.289,2.9,140,"β","CMi","Gomeisa"],[194.007,38.318,2.9,100,"α²","CVn","Chara"],[322.89,-5.571,2.91,60,"β","Aqr","Sadalsuud"],[46.199,53.506,2.93,52,"γ","Per",""],[102.484,-50.615,2.93,48,"τ","Pup",""],[340.75,30.221,2.94,58,"η","Peg","Matar"],[59.508,-13.509,2.95,35,"γ","Eri","Zaurak"],[187.466,-16.516,2.95,120,"δ","Crv","Algorab"],[262.96,-49.876,2.95,260,"α","Ara",""],[331.446,-0.32,2.96,58,"α","Aqr","Sadalmelik"],[100.983,25.131,2.98,52,"ε","Gem","Mebsuta"],[146.463,23.774,2.98,59,"ε","Leo","Ras Elased Australis"],[75.492,43.823,2.99,75,"ε","Aur","Haldus"],[271.452,-30.424,2.99,50,"γ²","Sgr","Alnasl"],[286.352,13.863,2.99,100,"ζ","Aql","Deneb el Okab"],[32.386,34.987,3.0,88,"β","Tri",""],[84.411,21.142,3.0,220,"ζ","Tau","Tien Kwan"],[182.531,-22.62,3.0,47,"ε","Crv","Minkar"],[199.73,-23.172,3.0,52,"γ","Hya",""],[55.731,47.788,3.01,200,"δ","Per",""],[146.775,-65.072,3.01,85,"υ","Car",""],[167.416,44.499,3.01,48,"ψ","UMa",""],[328.482,-37.365,3.01,140,"γ","Gru","Aldhanab"],[95.078,-30.063,3.02,260,"ζ","CMa","Furud"],[105.756,-23.833,3.02,240,"ο²","CMa",""],[218.02,38.308,3.03,82,"γ","Boo","Seginus"],[266.896,-40.127,3.03,72,"ι¹","Sco",""],[34.836,-2.978,3.04,24,"ο","Cet","Mira"],[207.404,-42.474,3.04,260,"μ","Cen",""],[155.582,41.499,3.05,35,"μ","UMa","Tania Australis"],[191.57,-68.108,3.05,260,"β","Mus",""],[230.182,71.834,3.05,92,"γ","UMi","Pherkad"],[288.139,67.662,3.07,51,"δ","Dra","Altais"],[252.968,-38.047,3.08,280,"μ¹","Sco",""],[292.68,27.96,3.08,46,"β¹","Cyg","Albireo"],[305.253,-14.781,3.08,63,"β","Cap","Dabih"],[133.848,5.946,3.11,51,"ζ","Hya","Hydrobius"],[162.406,-16.194,3.11,47,"ν","Hya",""],[274.407,-36.762,3.11,30,"η","Sgr",""],[309.392,-47.291,3.11,50,"α","Ind",""],[87.74,-35.768,3.12,47,"β","Col","Wazn"],[140.264,34.392,3.13,40,"α","Lyn",""],[142.805,-57.034,3.13,42,"","",""],[173.945,-63.02,3.13,120,"λ","Cen",""],[224.79,-42.104,3.13,260,"κ","Cen",""],[254.655,-55.99,3.13,46,"ζ","Ara",""],[134.802,48.042,3.14,82,"ι","UMa","Talitha"],[258.758,24.839,3.14,92,"δ","Her","Sarin"],[258.762,36.809,3.16,46,"π","Her",""],[76.629,41.234,3.17,240,"η","Aur","Hoedus II"],[99.44,-43.196,3.17,140,"ν","Pup",""],[143.214,51.677,3.17,66,"θ","UMa","Sarir"],[257.197,65.715,3.17,180,"ζ","Dra","Aldhibain"],[281.414,-26.991,3.17,140,"φ","Sgr",""],[72.46,6.961,3.19,66,"π³","Ori","Tabit"],[76.365,-22.371,3.19,42,"ε","Lep",""],[220.627,-64.975,3.19,88,"α","Cir",""],[254.417,9.375,3.2,47,"κ","Oph",""],[318.234,30.227,3.2,52,"ζ","Cyg",""],[267.465,-37.043,3.21,47,"","",""],[354.837,77.632,3.21,48,"γ","Cep","Errai"],[230.343,-40.648,3.22,280,"δ","Lup",""],[302.826,-0.821,3.23,120,"θ","Aql",""],[322.165,70.561,3.23,280,"β","Cep","Alfirk"],[44.565,-40.305,3.24,90,"θ¹","Eri","Acamar"],[56.81,-74.239,3.24,32,"γ","Hyi",""],[244.58,-4.692,3.24,51,"ε","Oph","Yed Posterior"],[284.736,32.689,3.24,120,"γ","Lyr","Sulafat"],[112.308,-43.301,3.25,42,"σ","Pup",""],[275.328,-2.899,3.26,50,"η","Ser",""],[9.832,30.861,3.27,46,"δ","And",""],[68.499,-55.045,3.27,100,"α","Dor",""],[102.047,-61.941,3.27,82,"α","Pic",""],[211.593,-26.683,3.27,47,"π","Hya",""],[260.502,-24.999,3.27,260,"θ","Oph",""],[343.662,-15.821,3.27,92,"δ","Aqr","Skat"],[93.719,22.507,3.28,30,"η","Gem","Propus"],[226.017,-25.282,3.29,30,"σ","Lib","Brachium"],[231.232,58.966,3.29,47,"ι","Dra","Edasich"],[16.521,-46.719,3.31,52,"β","Phe",""],[78.233,-16.206,3.31,120,"μ","Lep",""],[183.857,57.032,3.31,92,"δ","UMa","Megrez"],[153.434,-70.038,3.32,140,"ω","Car",""],[158.006,-61.685,3.32,220,"","",""],[286.735,-27.671,3.32,48,"τ","Sgr",""],[258.038,-43.239,3.33,70,"η","Sco",""],[117.324,-24.86,3.34,54,"ξ","Pup","Azmidiske"],[168.56,15.429,3.34,95,"θ","Leo","Chertan"],[261.348,-56.377,3.34,280,"γ","Ara",""],[269.757,-9.774,3.34,50,"ν","Oph","Sinistra"],[63.606,-62.474,3.35,52,"α","Ret",""],[332.714,58.201,3.35,48,"ζ","Cep",""],[81.119,-2.397,3.36,280,"η","Ori",""],[101.322,12.896,3.36,68,"ξ","Gem","Alzir"],[127.566,60.718,3.36,55,"ο","UMa","Muscida"],[291.375,3.115,3.36,70,"δ","Aql",""],[203.673,-0.596,3.37,92,"ζ","Vir","Heze"],[230.67,-44.689,3.37,260,"ε","Lup",""],[28.599,63.67,3.38,240,"ε","Cas","Segin"],[131.694,6.419,3.38,55,"ε","Hya",""],[193.901,3.397,3.38,30,"δ","Vir","Auva"],[46.294,38.84,3.39,29,"ρ","Per","Gorgonea Tertia"],[67.165,15.871,3.4,82,"θ²","Tau",""],[154.271,-61.332,3.4,46,"","",""],[340.365,10.831,3.4,140,"ζ","Peg","Homam"],[22.091,-43.318,3.41,35,"γ","Phe",""],[28.27,29.579,3.41,66,"α","Tri","Mothallah"],[207.376,-41.688,3.41,260,"ν","Cen",""],[228.071,-52.099,3.41,52,"ζ","Lup",""],[240.03,-38.397,3.41,260,"η","Lup",""],[266.615,27.721,3.42,55,"μ","Her",""],[311.24,-66.203,3.42,82,"β","Pav",""],[311.322,61.839,3.43,50,"η","Cep",""],[12.275,57.816,3.44,62,"η","Cas","Achird"],[137.742,-58.967,3.44,260,"","",""],[154.173,23.417,3.44,75,"ζ","Leo","Adhafera"],[286.562,-4.883,3.44,120,"λ","Aql","Al Thalimain"],[17.148,-10.182,3.45,48,"η","Cet","Dheneb"],[154.274,42.914,3.45,95,"λ","UMa","Tania Borealis"],[282.52,33.363,3.45,140,"β","Lyr","Sheliak"],[40.825,3.236,3.47,92,"γ","Cet","Kaffaljidhma"],[60.17,12.49,3.47,240,"λ","Tau",""],[105.43,-27.935,3.47,40,"σ","CMa",""],[119.195,-52.982,3.47,240,"χ","Car",""],[228.876,33.315,3.47,52,"δ","Boo",""],[299.689,19.492,3.47,35,"γ","Sge",""],[169.62,33.094,3.48,46,"ν","UMa","Alula Borealis"],[258.662,14.39,3.48,28,"α¹","Her","Rasalgethi"],[342.501,24.602,3.48,52,"μ","Peg","Sadalbari"],[342.139,-51.317,3.49,92,"ε","Gru",""],[26.017,-15.938,3.5,52,"τ","Cet",""],[225.487,40.391,3.5,52,"β","Boo","Nekkar"],[276.743,-45.968,3.51,240,"α","Tel",""],[284.432,-21.107,3.51,48,"ξ²","Sgr",""],[124.129,9.186,3.52,44,"β","Cnc","Altarf"],[145.287,9.892,3.52,66,"ο","Leo","Subra"],[151.833,16.763,3.52,100,"η","Leo",""],[342.42,66.201,3.52,50,"ι","Cep",""],[67.154,19.18,3.53,51,"ε","Tau","Ain"],[110.031,21.982,3.53,72,"δ","Gem","Wasat"],[237.405,-3.43,3.53,100,"μ","Ser",""],[250.724,38.922,3.53,53,"η","Her",""],[332.55,6.198,3.53,95,"θ","Peg","Biham"],[55.812,-9.763,3.54,50,"δ","Eri","Rana"],[83.785,9.934,3.54,360,"λ","Ori","Meissa"],[149.216,-54.568,3.54,200,"φ","Vel",""],[173.25,-31.858,3.54,53,"ξ","Hya",""],[264.397,-15.399,3.54,75,"ξ","Ser",""],[86.739,-14.822,3.55,92,"ζ","Lep",""],[214.851,-46.058,3.55,260,"ι","Lup",""],[4.857,-8.824,3.56,48,"ι","Cet","Deneb Kaitos Schemali"],[34.128,-51.512,3.56,140,"φ","Eri",""],[64.474,-33.798,3.56,120,"υ⁴","Eri",""],[169.835,-14.779,3.56,52,"δ","Crt",""],[230.452,-36.261,3.56,42,"φ¹","Lup",""],[302.182,-66.182,3.56,54,"δ","Pav",""],[24.498,48.628,3.57,46,"","And","Nembus"],[116.112,24.398,3.57,52,"κ","Gem",""],[253.084,-38.017,3.57,260,"μ²","Sco",""],[275.264,72.733,3.57,64,"χ","Dra",""],[304.514,-12.545,3.57,52,"α²","Cap","Algedi"],[109.523,16.54,3.58,92,"λ","Gem",""],[217.958,30.371,3.58,46,"ρ","Boo",""],[234.256,-28.135,3.58,46,"υ","Lib",""],[185.34,-60.401,3.59,46,"ε","Cru",""],[21.006,-8.183,3.6,50,"θ","Cet",""],[51.203,9.029,3.6,54,"ο","Tau",""],[79.402,-6.844,3.6,200,"τ","Ori",""],[86.116,-22.448,3.6,66,"γ","Lep",""],[103.197,33.961,3.6,92,"θ","Gem",""],[135.906,47.157,3.6,98,"κ","UMa","Talitha Australis"],[142.675,-40.467,3.6,70,"ψ","Vel",""],[116.314,-37.969,3.61,47,"","",""],[152.647,-12.354,3.61,50,"λ","Hya",""],[177.674,1.765,3.61,62,"β","Vir","Zavijava"],[22.871,15.346,3.62,53,"η","Psc","Kullat Nunu"],[130.073,-52.922,3.62,240,"","",""],[195.567,-71.549,3.62,47,"δ","Mus",""],[253.646,-42.361,3.62,44,"ζ²","Sco",""],[262.775,-60.684,3.62,140,"δ","Ara",""],[266.433,-64.724,3.62,47,"η","Pav",""],[345.48,42.326,3.62,180,"ο","And",""],[42.496,27.261,3.63,140,"","Ari",""],[57.29,24.053,3.63,140,"","Tau","Atlas"],[309.387,14.595,3.63,68,"β","Del","Rotanev"],[176.402,-66.729,3.64,82,"λ","Mus",""],[64.948,15.628,3.65,50,"γ","Tau","Hyadum I"],[190.415,-1.449,3.65,75,"γ","Vir","Porrima"],[211.097,64.376,3.65,100,"α","Dra","Thuban"],[313.702,-58.454,3.65,48,"β","Ind",""],[9.243,53.897,3.66,260,"ζ","Cas",""],[234.664,-29.778,3.66,260,"τ","Lib",""],[271.658,-50.092,3.66,260,"θ","Ara",""],[347.362,-21.172,3.66,48,"","Aqr",""],[142.882,63.062,3.67,75,"","UMa",""],[236.547,15.422,3.67,95,"β","Ser","Chow"],[130.898,-33.186,3.68,280,"α","Pyx",""],[190.415,-1.449,3.68,75,"γ","Vir",""],[231.957,29.106,3.68,75,"β","CrB","Nusakan"],[325.023,-16.662,3.68,75,"γ","Cap","Nashira"],[49.879,-21.758,3.69,30,"τ⁴","Eri",""],[72.802,5.605,3.69,260,"π⁴","Ori",""],[146.312,-62.508,3.69,55,"","",""],[349.291,3.282,3.69,51,"γ","Psc",""],[28.99,-51.609,3.7,52,"χ","Eri",""],[56.219,24.113,3.7,180,"","Tau","Electra"],[269.441,29.248,3.7,52,"ξ","Her",""],[89.101,-14.168,3.71,74,"η","Lep",""],[176.512,47.779,3.71,50,"χ","UMa","Al Kaphrah"],[237.704,4.478,3.71,95,"ε","Ser",""],[298.828,6.407,3.71,52,"β","Aql","Alshain"],[73.563,2.441,3.72,240,"π⁵","Ori",""],[89.882,54.285,3.72,50,"δ","Aur",""],[221.562,1.893,3.72,100,"","Vir",""],[316.233,43.928,3.72,44,"ξ","Cyg",""],[318.698,38.046,3.72,72,"τ","Cyg",""],[27.865,-10.335,3.73,50,"ζ","Cet","Baten Kaitos"],[53.232,-9.458,3.73,47,"ε","Eri","Ran"],[118.054,-40.576,3.73,48,"","",""],[271.837,9.564,3.73,90,"","Oph",""],[51.793,9.733,3.74,120,"ξ","Tau",""],[321.667,-22.411,3.74,56,"ζ","Cap",""],[343.154,-7.58,3.74,32,"λ","Aqr",""],[75.62,41.076,3.75,44,"ζ","Aur","Haedus"],[136.039,-47.098,3.75,47,"","",""],[245.48,19.153,3.75,78,"γ","Her",""],[266.973,2.707,3.75,100,"γ","Oph",""],[268.382,56.873,3.75,47,"ξ","Dra","Grumium"],[337.293,58.415,3.75,68,"δ","Cep",""],[42.674,55.896,3.76,46,"η","Per","Miram"],[65.734,17.543,3.76,50,"δ¹","Tau","Hyadum II"],[83.406,-62.49,3.76,66,"β","Dor",""],[252.446,-59.041,3.76,42,"η","Ara",""],[325.369,-77.39,3.76,50,"ν","Oct",""],[331.753,25.345,3.76,68,"ι","Peg",""],[56.298,42.579,3.77,68,"ν","Per",""],[126.434,-66.137,3.77,48,"β","Vol",""],[286.171,-21.742,3.77,51,"ο","Sgr",""],[289.276,53.369,3.77,51,"κ","Cyg",""],[309.91,15.912,3.77,120,"α","Del","Sualocin"],[311.919,-9.496,3.77,98,"ε","Aqr","Albali"],[337.823,50.282,3.77,98,"α","Lac",""],[107.187,-70.499,3.78,50,"γ²","Vol",""],[163.373,-58.853,3.78,48,"","",""],[106.027,20.57,3.79,64,"ζ","Gem","Mekbuda"],[111.432,27.798,3.79,51,"ι","Gem",""],[292.426,51.73,3.79,88,"ι²","Cyg",""],[303.408,46.741,3.79,47,"","Cyg",""],[47.374,44.857,3.8,50,"κ","Per","Misam"],[147.748,59.039,3.8,72,"υ","UMa",""],[154.994,19.841,3.8,53,"γ²","Leo",""],[233.7,10.537,3.8,75,"δ","Ser",""],[233.7,10.539,3.8,75,"δ","Ser",""],[264.866,46.006,3.8,240,"ι","Her",""],[84.687,-2.6,3.81,330,"σ","Ori",""],[87.83,-20.879,3.81,50,"δ","Lep",""],[156.523,-16.836,3.81,44,"μ","Hya",""],[68.887,-30.562,3.82,52,"υ²","Eri","Theemin"],[139.711,36.802,3.82,92,"","Lyn",""],[156.97,-58.739,3.82,72,"","",""],[247.728,1.984,3.82,100,"λ","Oph","Marfik"],[296.847,18.534,3.82,32,"δ","Sge",""],[354.391,46.458,3.82,52,"λ","And",""],[56.08,32.288,3.83,280,"ο","Per","Atik"],[163.328,34.215,3.83,50,"","LMi","Praecipua"],[209.568,-42.101,3.83,260,"φ","Cen",""],[221.965,-79.045,3.83,46,"α","Aps",""],[271.886,28.762,3.83,120,"ο","Her",""],[297.043,70.268,3.83,53,"ε","Dra","Tyl"],[67.144,15.962,3.84,50,"θ¹","Tau",""],[130.157,-46.649,3.84,70,"","",""],[133.762,-60.645,3.84,140,"","",""],[159.325,-48.226,3.84,69,"","",""],[172.851,69.331,3.84,35,"λ","Dra","Gianfar"],[235.686,26.296,3.84,120,"γ","CrB",""],[275.925,21.77,3.84,47,"","Her",""],[335.414,-1.387,3.84,100,"γ","Aqr","Sadachbia"],[56.05,-64.807,3.85,47,"β","Ret",""],[86.821,-51.066,3.85,88,"β","Pic",""],[95.528,-33.436,3.85,53,"δ","Col",""],[108.703,-26.773,3.85,260,"ω","CMa",""],[153.684,-42.122,3.85,95,"","",""],[158.203,9.307,3.85,280,"ρ","Leo",""],[239.113,15.662,3.85,66,"γ","Ser",""],[243.86,-63.686,3.85,58,"δ","TrA",""],[278.802,-8.244,3.85,46,"α","Sct",""],[63.5,-42.294,3.86,48,"α","Hor",""],[189.426,-48.541,3.86,95,"τ","Cen",""],[269.063,37.251,3.86,48,"θ","Her",""],[273.441,-21.059,3.86,140,"μ","Sgr",""],[14.188,38.499,3.87,88,"μ","And",""],[48.018,-28.987,3.87,63,"α","For","Fornacis"],[56.457,24.368,3.87,140,"","Tau","Maia"],[69.545,-14.304,3.87,47,"","Eri","Sceptrum"],[82.803,-35.471,3.87,48,"ε","Col",""],[103.533,-24.184,3.87,47,"ο¹","CMa",""],[188.117,-72.133,3.87,200,"γ","Mus",""],[188.371,69.788,3.87,180,"κ","Dra",""],[209.67,-44.804,3.87,260,"υ¹","Cen",""],[227.984,-48.738,3.87,120,"κ¹","Lup",""],[2.353,-45.748,3.88,50,"ε","Phe",""],[138.591,2.314,3.88,120,"θ","Hya",""],[148.191,26.007,3.88,47,"μ","Leo","Rasalas"],[202.761,-39.407,3.88,51,"","",""],[220.765,-5.658,3.88,72,"μ","Vir","Rijl al Awwa"],[239.221,-29.214,3.88,260,"ρ","Sco",""],[44.107,-8.898,3.89,48,"η","Eri","Azha"],[170.252,-54.491,3.89,200,"π","Cen",""],[184.977,-0.667,3.89,95,"η","Vir","Zaniah"],[244.935,46.313,3.89,200,"τ","Her",""],[248.363,-78.897,3.89,52,"γ","Aps",""],[299.077,35.083,3.89,50,"η","Cyg",""],[126.415,-3.906,3.9,100,"","",""],[298.118,1.006,3.9,66,"η","Aql",""],[347.59,-45.247,3.9,48,"ι","Gru",""],[60.789,5.989,3.91,98,"ν","Tau",""],[131.507,-46.042,3.91,98,"","",""],[144.964,-1.143,3.91,47,"ι","Hya",""],[167.147,-58.975,3.91,56,"","",""],[187.01,-50.231,3.91,260,"σ","Cen",""],[233.882,-14.789,3.91,52,"γ","Lib","Zuben-el-Akrab"],[17.096,-55.246,3.92,180,"ζ","Phe",""],[255.073,30.926,3.92,100,"ε","Her",""],[318.956,5.248,3.92,60,"α","Equ","Kitalpha"],[69.08,-3.353,3.93,260,"ν","Eri",""],[115.312,-9.551,3.93,50,"α","Mon",""],[290.418,-17.847,3.93,75,"ρ¹","Sgr",""],[6.551,-43.68,3.94,82,"κ","Phe",""],[131.171,18.154,3.94,50,"δ","Cnc","Asellus Australis"],[170.981,10.529,3.94,69,"ι","Leo",""],[314.293,41.167,3.94,98,"ν","Cyg",""],[22.813,-49.073,3.95,50,"δ","Phe",""],[43.565,52.763,3.95,56,"τ","Per",""],[99.171,-19.256,3.95,48,"ν²","CMa",""],[115.455,-72.606,3.95,50,"ζ","Vol",""],[200.985,54.922,3.95,98,"ζ","UMa",""],[237.74,-33.627,3.95,120,"χ","Lup",""],[341.633,23.566,3.95,52,"λ","Peg",""],[66.009,-34.017,3.96,44,"","Eri",""],[89.787,-42.815,3.96,50,"η","Col",""],[102.46,-32.509,3.96,280,"κ","CMa",""],[115.952,-28.955,3.96,95,"","Pup",""],[182.913,-52.369,3.96,240,"ρ","Cen",""],[241.702,-20.669,3.96,280,"ω¹","Sco",""],[300.148,-72.911,3.96,100,"ε","Pav",""],[87.873,39.149,3.97,51,"ν","Aur",""],[130.026,-35.308,3.97,53,"β","Pyx",""],[135.16,41.783,3.97,68,"","",""],[137.819,-62.317,3.97,240,"","",""],[270.161,2.932,3.97,200,"","Oph",""],[290.972,-40.616,3.97,140,"α","Sgr","Rukbat"],[337.317,-43.496,3.97,54,"δ¹","Gru",""],[350.743,-20.101,3.97,50,"","Aqr",""],[30.859,72.421,3.98,95,"","Cas",""],[93.714,-6.275,3.98,48,"γ","Mon",""],[109.207,-67.957,3.98,66,"δ","Vol",""],[303.868,47.714,3.98,46,"","Cyg",""],[349.358,-58.236,3.99,74,"γ","Tuc",""],[30.001,-21.078,4.0,35,"υ","Cet",""],[43.47,-49.89,4.0,24,"","",""],[135.612,-66.396,4.0,95,"α","Vol",""],[156.099,-74.032,4.0,72,"","",""],[220.49,-37.794,4.0,240,"","",""],[34.329,33.847,4.01,98,"γ","Tri",""],[132.633,-27.71,4.01,46,"γ","Pyx",""],[201.306,54.988,4.01,88,"","UMa","Alcor"],[240.472,58.565,4.01,63,"θ","Dra",""],[242.999,-19.461,4.01,240,"ν","Sco","Jabbah"],[280.759,-71.428,4.01,50,"ζ","Pav",""],[290.66,-44.459,4.01,120,"β¹","Sgr","Arkab Prior"],[307.349,30.369,4.01,68,"","Cyg",""],[342.398,-13.593,4.01,35,"τ²","Aqr",""],[359.828,6.863,4.01,69,"ω","Psc",""],[71.375,-3.255,4.02,200,"μ","Eri",""],[131.674,28.76,4.02,53,"ι","Cnc",""],[182.103,-24.729,4.02,72,"α","Crv","Alchiba"],[244.96,-50.156,4.02,52,"γ²","Nor",""],[284.906,15.068,4.02,48,"ε","Aql",""],[285.42,-5.739,4.02,48,"","Aql",""],[323.495,45.592,4.02,52,"ρ","Cyg",""],[338.839,-0.118,4.02,120,"η","Aqr",""],[75.855,60.442,4.03,59,"β","Cam",""],[176.465,6.529,4.03,34,"ν","Vir",""],[193.648,-57.178,4.03,260,"μ¹","Cru",""],[271.364,2.499,4.03,50,"","Oph",""],[308.303,11.303,4.03,180,"ε","Del","Deneb Dulfim"],[59.741,35.791,4.04,390,"ξ","Per","Menkib"],[62.165,47.713,4.04,240,"","Per",""],[62.966,-6.837,4.04,72,"ο¹","Eri","Beid"],[184.609,-64.003,4.04,260,"ζ","Cru",""],[283.834,43.946,4.04,28,"","Lyr",""],[47.267,49.613,4.05,60,"ι","Per",""],[170.284,6.029,4.05,120,"σ","Leo",""],[215.139,-37.885,4.05,100,"ψ","Cen",""],[216.299,51.851,4.05,64,"θ","Boo","Asellus Primus"],[219.472,-49.426,4.05,200,"ρ","Lup",""],[220.914,-35.174,4.05,46,"","",""],[227.211,-45.28,4.05,240,"λ","Lup",""],[11.835,24.267,4.06,48,"ζ","And",""],[113.98,26.896,4.06,35,"υ","Gem",""],[254.896,-53.161,4.06,44,"ε¹","Ara",""],[25.915,50.689,4.07,260,"φ","Per",""],[39.871,0.329,4.07,260,"δ","Cet",""],[74.093,13.514,4.07,47,"ο²","Ori",""],[103.548,-12.039,4.07,44,"θ","CMa",""],[124.632,-76.92,4.07,68,"α","Cha",""],[131.1,-42.649,4.07,55,"","",""],[207.369,15.798,4.07,42,"υ","Boo",""],[229.378,-58.801,4.07,92,"β","Cir",""],[316.487,-17.233,4.07,98,"θ","Cap",""],[143.611,-59.229,4.08,200,"","",""],[164.944,-18.299,4.08,50,"α","Crt","Alkes"],[171.22,-17.684,4.08,88,"γ","Crt",""],[214.004,-6.001,4.08,66,"ι","Vir","Syrma"],[320.522,19.804,4.08,48,"","Peg",""],[325.877,58.78,4.08,32,"μ","Cep","Garnet Star"],[24.199,41.406,4.09,63,"υ","And",""],[35.437,-68.659,4.09,92,"δ","Hyi",""],[45.598,-23.624,4.09,90,"τ³","Eri",""],[84.226,9.291,4.09,50,"φ²","Ori",""],[237.185,18.142,4.09,35,"κ","Ser",""],[40.167,-39.856,4.11,50,"ι","Eri",""],[39.898,-68.267,4.11,120,"ε","Hyi",""],[52.718,12.937,4.11,50,"","Tau",""],[117.31,-46.373,4.11,300,"","",""],[158.867,-78.608,4.11,35,"γ","Cha",""],[176.628,-61.178,4.11,55,"","",""],[184.392,-67.961,4.11,28,"ε","Mus",""],[234.18,-66.317,4.11,48,"ε","TrA",""],[287.368,-37.904,4.11,95,"α","CrA","Alfecca Meridiana"],[287.507,-39.341,4.11,50,"β","CrA",""],[312.955,-26.919,4.11,35,"ω","Cap",""],[337.44,-43.749,4.11,29,"δ²","Gru",""],[41.05,49.228,4.12,63,"θ","Per",""],[90.596,9.647,4.12,95,"μ","Ori",""],[105.94,-15.633,4.12,140,"γ","CMa","Muliphein"],[147.87,-14.847,4.12,53,"υ¹","Hya",""],[181.302,8.733,4.12,52,"ο","Vir",""],[345.22,-52.754,4.12,52,"ζ","Gru",""],[277.208,-49.071,4.13,52,"ζ","Tel",""],[298.815,-41.868,4.13,50,"ι","Sgr",""],[326.161,25.645,4.13,68,"κ","Peg",""],[333.993,37.749,4.13,46,"","Lac",""],[354.987,5.626,4.13,64,"ι","Psc",""],[63.725,48.409,4.14,60,"μ","Per",""],[80.987,-7.808,4.14,52,"","Ori",""],[129.411,-42.989,4.14,85,"","",""],[233.232,31.359,4.14,180,"θ","CrB",""],[311.524,-25.271,4.14,69,"ψ","Cap",""],[355.102,44.334,4.14,120,"κ","And",""],[97.241,20.212,4.15,180,"ν","Gem",""],[107.966,-0.493,4.15,95,"δ","Mon",""],[181.72,-64.614,4.15,72,"η","Cru",""],[238.456,-16.729,4.15,52,"θ","Lib",""],[239.397,26.878,4.15,47,"ε","CrB",""],[341.514,-81.382,4.15,78,"β","Oct",""],[8.25,62.932,4.16,280,"κ","Cas",""],[91.03,23.263,4.16,53,"","Gem",""],[129.414,5.704,4.16,98,"δ","Hya",""],[249.094,-35.256,4.16,41,"","",""],[334.208,-7.783,4.16,52,"θ","Aqr","Ancha"],[57.364,-36.2,4.17,51,"","",""],[261.592,-24.175,4.17,92,"","Oph",""],[340.164,-27.044,4.17,140,"ε","PsA",""],[56.582,23.948,4.18,180,"","Tau","Merope"],[112.278,31.784,4.18,75,"ρ","Gem",""],[214.096,46.088,4.18,100,"λ","Boo",""],[207.361,-34.451,4.19,29,"","Cen",""],[213.224,-10.274,4.19,47,"κ","Vir",""],[281.415,20.546,4.19,66,"","Her",""],[333.758,57.044,4.19,75,"ε","Cep",""],[341.673,12.173,4.19,66,"ξ","Peg",""],[82.696,5.948,4.2,200,"","Ori",""],[119.215,-22.88,4.2,64,"","Pup",""],[248.526,42.437,4.2,120,"σ","Her",""],[52.267,59.94,4.21,120,"","",""],[85.19,-1.943,4.21,300,"ζ","Ori",""],[156.971,36.707,4.21,51,"β","LMi",""],[343.987,-32.54,4.21,52,"δ","PsA",""],[348.973,-9.088,4.21,50,"ψ¹","Aqr",""],[66.342,22.294,4.22,82,"κ¹","Tau",""],[275.19,71.338,4.22,100,"φ","Dra",""],[281.794,-4.748,4.22,56,"β","Sct",""],[283.054,-62.188,4.22,260,"λ","Pav",""],[307.395,62.994,4.22,82,"θ","Cep",""],[311.415,30.72,4.22,51,"","Cyg",""],[321.611,-65.366,4.22,66,"γ","Pav",""],[348.581,-6.049,4.22,34,"φ","Aqr",""],[5.018,-64.875,4.23,62,"ζ","Tuc",""],[42.646,38.319,4.23,72,"","Per",""],[54.123,48.193,4.23,200,"ψ","Per",""],[56.712,-23.25,4.23,70,"τ⁶","Eri",""],[206.422,-33.044,4.23,70,"","Cen",""],[241.648,-36.802,4.23,260,"θ","Lup",""],[247.845,-34.704,4.23,260,"","",""],[251.492,82.037,4.23,55,"ε","UMi",""],[297.641,32.914,4.23,26,"χ","Cyg",""],[319.354,39.395,4.23,120,"σ","Cyg",""],[326.698,49.309,4.23,240,"π²","Cyg",""],[118.326,-48.103,4.24,300,"","",""],[250.769,-77.517,4.24,50,"β","Aps",""],[304.412,-12.508,4.24,57,"α¹","Cap","Al Giedi"],[17.186,86.257,4.25,47,"","",""],[17.376,47.242,4.25,160,"φ","And",""],[36.746,-47.704,4.25,200,"κ","Eri",""],[41.031,-13.859,4.25,160,"π","Cet",""],[64.007,-51.487,4.25,69,"γ","Dor",""],[69.172,41.265,4.25,44,"","Per",""],[68.914,10.161,4.25,88,"","Tau",""],[125.709,43.188,4.25,44,"","Lyn","Alsciaukat"],[134.622,11.858,4.25,88,"α","Cnc","Acubens"],[156.788,-31.068,4.25,44,"α","Ant",""],[216.881,75.696,4.25,44,"","UMi",""],[26.348,9.158,4.26,52,"ο","Psc","Torcularis Septentrionalis"],[89.984,45.937,4.26,30,"π","Aur",""],[184.586,-79.312,4.26,200,"β","Cha",""],[188.435,41.358,4.26,60,"β","CVn",""],[197.968,27.878,4.26,62,"β","Com",""],[210.412,1.544,4.26,92,"τ","Vir",""],[242.192,44.935,4.26,120,"φ","Her",""],[265.354,-12.875,4.26,95,"ο","Ser",""],[41.235,10.114,4.27,75,"μ","Cet",""],[49.982,-43.07,4.27,52,"","",""],[53.447,-21.633,4.27,140,"τ⁵","Eri",""],[69.54,12.511,4.27,85,"","Tau",""],[77.287,-8.754,4.27,260,"λ","Eri",""],[122.372,-47.346,4.27,280,"γ¹","Vel",""],[193.359,-40.179,4.27,82,"","",""],[196.728,-49.906,4.27,280,"ξ²","Cen",""],[229.633,-47.875,4.27,140,"μ","Lup",""],[311.665,16.124,4.27,48,"γ²","Del",""],[331.609,-13.87,4.27,120,"ι","Aqr",""],[15.736,7.89,4.28,50,"ε","Psc",""],[37.04,8.46,4.28,120,"ξ²","Cet",""],[54.218,0.402,4.28,62,"","Tau",""],[66.577,22.814,4.28,80,"υ","Tau",""],[70.561,22.957,4.28,240,"τ","Tau",""],[115.828,28.884,4.28,48,"σ","Gem",""],[159.827,-55.603,4.28,58,"","",""],[178.228,-33.908,4.28,120,"β","Hya",""],[247.785,-16.613,4.28,52,"φ","Oph",""],[320.562,-16.834,4.28,53,"ι","Cap",""],[346.72,-43.521,4.28,68,"θ","Gru",""],[351.992,6.379,4.28,48,"θ","Psc",""],[61.646,50.351,4.29,100,"λ","Per",""],[63.884,8.892,4.29,240,"μ","Tau",""],[66.373,17.928,4.29,95,"δ³","Tau",""],[73.513,66.343,4.29,330,"α","Cam",""],[79.894,-13.177,4.29,300,"λ","Lep",""],[144.272,81.326,4.29,46,"","",""],[261.839,-29.867,4.29,68,"","Oph",""],[264.137,-38.635,4.29,50,"","",""],[290.805,-44.8,4.29,72,"β²","Sgr","Arkab Posterior"],[326.362,61.121,4.29,95,"ν","Cep",""],[330.947,64.628,4.29,92,"ξ","Cep","Kurhah"],[332.497,33.178,4.29,68,"π²","Peg",""],[337.876,-32.346,4.29,100,"β","PsA",""],[354.534,43.268,4.29,140,"ι","And",""],[56.302,24.467,4.3,180,"","Tau","Taygeta"],[130.806,3.399,4.3,240,"η","Hya",""],[174.237,-0.824,4.3,52,"υ","Leo",""],[283.626,36.899,4.3,29,"δ²","Lyr",""],[303.35,56.568,4.3,92,"","Cyg",""],[14.652,-29.358,4.31,160,"α","Scl",""],[142.93,22.968,4.31,42,"λ","Leo","Alterf"],[188.017,-16.196,4.31,72,"η","Crv",""],[231.123,37.377,4.31,72,"μ¹","Boo","Alkalurops"],[70.11,-19.672,4.32,29,"","Eri",""],[112.041,8.926,4.32,46,"γ","CMi",""],[131.594,-13.548,4.32,52,"","Hya",""],[177.421,-63.788,4.32,240,"","",""],[216.729,-83.668,4.32,47,"δ","Oct",""],[222.91,-43.576,4.32,200,"ο","Lup",""],[236.015,77.794,4.32,92,"ζ","UMi",""],[241.851,-20.869,4.32,57,"ω²","Sco",""],[309.585,-1.105,4.32,53,"","Aql",""],[17.776,55.15,4.33,82,"θ","Cas","Marfark"],[30.512,2.764,4.33,100,"α","Psc","Alrescha"],[97.964,-23.418,4.33,300,"ξ¹","CMa",""],[130.154,-59.761,4.33,280,"","",""],[180.756,-63.313,4.33,88,"θ¹","Cru",""],[193.279,-48.943,4.33,46,"","",""],[215.081,-56.387,4.33,180,"","",""],[234.513,-42.568,4.33,44,"ω","Lup",""],[260.207,-12.847,4.33,95,"ν","Ser",""],[274.965,36.064,4.33,47,"κ","Lyr",""],[122.148,-2.984,4.34,58,"ζ","Mon",""],[139.051,-57.541,4.34,34,"","",""],[210.431,-45.604,4.34,66,"υ²","Cen",""],[229.458,-30.149,4.34,51,"","Lup",""],[261.629,4.14,4.34,47,"σ","Oph",""],[326.237,-33.026,4.34,100,"ι","PsA",""],[326.128,17.35,4.34,55,"","Peg",""],[44.568,-40.304,4.35,98,"θ²","Eri",""],[47.907,19.727,4.35,47,"δ","Ari","Botein"],[86.193,-65.736,4.35,82,"δ","Dor",""],[93.845,29.498,4.35,52,"κ","Aur",""],[104.319,58.422,4.35,55,"","Lyn",""],[121.983,-68.617,4.35,180,"ε","Vol",""],[125.16,-77.484,4.35,47,"θ","Cha",""],[144.207,-49.355,4.35,88,"","",""],[216.545,-45.379,4.35,69,"τ²","Lup",""],[272.145,-63.668,4.35,82,"π","Pav",""],[9.22,33.719,4.36,200,"π","And",""],[10.838,-57.463,4.36,100,"η","Phe",""],[52.644,47.995,4.36,46,"σ","Per",""],[61.174,22.082,4.36,50,"","Tau",""],[72.653,8.9,4.36,98,"π²","Ori",""],[78.308,-12.941,4.36,120,"κ","Lep",""],[89.384,-35.283,4.36,260,"γ","Col",""],[132.108,5.838,4.36,100,"ρ","Hya",""],[186.735,28.268,4.36,48,"γ","Com",""],[211.512,-41.18,4.36,260,"χ","Cen",""],[272.19,20.814,4.36,260,"","Her",""],[263.054,86.586,4.36,98,"δ","UMi","Yildun"],[275.807,-61.494,4.36,44,"ξ","Pav",""],[281.193,37.605,4.36,90,"ζ¹","Lyr",""],[281.755,18.181,4.36,88,"","Her",""],[289.092,38.134,4.36,50,"θ","Lyr",""],[294.18,-1.286,4.36,200,"ι","Aql",""],[337.382,47.707,4.36,35,"","Lac",""],[7.886,-62.958,4.37,120,"β¹","Tuc",""],[9.639,29.312,4.37,54,"ε","And",""],[33.25,8.847,4.37,54,"ξ¹","Cet",""],[94.138,-35.141,4.37,50,"κ","Col",""],[104.034,-17.054,4.37,240,"ι","CMa",""],[151.976,9.997,4.37,46,"","Leo",""],[295.024,18.014,4.37,59,"α","Sge","Sham"],[295.262,17.476,4.37,52,"β","Sge",""],[299.934,-35.276,4.37,240,"θ¹","Sgr",""],[353.243,-37.818,4.37,120,"β","Scl",""],[83.053,18.594,4.38,32,"","Tau",""],[197.488,-5.539,4.38,98,"θ","Vir",""],[253.502,10.165,4.38,140,"ι","Oph",""],[73.224,-5.453,4.39,69,"ω","Eri",""],[98.744,-52.976,4.39,100,"","",""],[120.566,2.334,4.39,47,"","",""],[165.039,-42.226,4.39,92,"","",""],[260.251,-21.113,4.39,74,"ξ","Oph",""],[288.44,39.146,4.39,260,"η","Lyr","Aladfar"],[302.222,77.711,4.39,120,"κ","Cep",""],[319.967,-53.45,4.39,88,"θ","Ind",""],[349.476,-9.182,4.39,200,"ψ²","Aqr",""],[351.512,-20.642,4.39,42,"","Aqr",""],[102.464,-53.622,4.4,54,"","",""],[109.677,-24.954,4.4,330,"τ","CMa",""],[122.257,-19.245,4.4,200,"","Pup",""],[225.725,2.091,4.4,50,"","Vir",""],[329.48,-54.992,4.4,75,"δ","Ind",""],[351.345,23.404,4.4,63,"υ","Peg",""],[28.412,-46.302,4.41,29,"ψ","Phe",""],[83.705,9.489,4.41,300,"φ¹","Ori",""],[88.595,20.276,4.41,60,"χ¹","Ori",""],[107.785,30.245,4.41,47,"τ","Gem",""],[119.56,-49.245,4.41,280,"","",""],[169.546,31.529,4.41,60,"ξ","UMa","Alula Australis"],[222.572,-27.96,4.41,44,"","Hya",""],[262.685,26.111,4.41,46,"λ","Her","Maasym"],[269.626,30.189,4.41,72,"ν","Her",""],[346.975,75.388,4.41,58,"π","Cep",""],[349.706,-32.532,4.41,48,"γ","Scl",""],[0.49,-6.014,4.41,30,"","Psc",""],[14.302,23.418,4.42,52,"η","And",""],[56.535,-12.102,4.42,32,"π","Eri",""],[91.893,14.768,4.42,240,"ν","Ori",""],[165.582,20.18,4.42,98,"","Leo",""],[215.759,-39.512,4.42,160,"","",""],[218.154,-50.457,4.42,260,"σ","Lup",""],[246.756,-18.456,4.42,260,"χ","Oph",""],[311.934,-5.028,4.42,30,"","Aqr",""],[337.209,-0.02,4.42,70,"ζ²","Aqr",""],[12.171,7.585,4.43,44,"δ","Psc",""],[63.818,-7.653,4.43,48,"ο²","Eri","Keid"],[99.473,-18.238,4.43,48,"ν³","CMa",""],[220.287,13.728,4.43,95,"ζ","Boo",""],[236.611,7.353,4.43,60,"λ","Ser",""],[305.965,32.19,4.43,47,"","Cyg",""],[310.865,15.074,4.43,82,"δ","Del",""],[319.48,34.897,4.43,260,"υ","Cyg",""],[335.89,52.229,4.43,52,"β","Lac",""],[3.66,-18.933,4.44,30,"","Cet",""],[25.358,5.487,4.44,46,"ν","Psc",""],[64.12,-59.302,4.44,47,"ε","Ret",""],[95.942,4.593,4.44,88,"ε","Mon",""],[123.512,-40.348,4.44,48,"","",""],[129.689,3.341,4.44,48,"σ","Hya","Minchir"],[284.238,-67.234,4.44,68,"κ","Pav",""],[292.176,24.665,4.44,35,"α","Vul","Lucida Anseris"],[70.14,-41.864,4.45,72,"α","Cae",""],[78.075,-11.869,4.45,140,"ι","Lep",""],[113.513,-22.296,4.45,66,"","",""],[122.84,-39.619,4.45,46,"","",""],[124.639,-36.659,4.45,82,"","",""],[135.023,-41.254,4.45,52,"","",""],[158.897,-57.558,4.45,46,"","",""],[161.445,-80.54,4.45,260,"δ²","Cha",""],[248.034,-21.466,4.45,82,"ω","Oph",""],[270.438,1.305,4.45,95,"","Oph",""],[288.887,73.356,4.45,47,"τ","Dra",""],[293.522,7.379,4.45,46,"μ","Aql",""],[42.272,-32.406,4.46,50,"β","For",""],[78.323,2.861,4.46,50,"ρ","Ori",""],[141.164,26.182,4.46,47,"κ","Leo","Al Minliar al Asad"],[177.786,-45.174,4.46,46,"","",""],[218.67,29.745,4.46,72,"σ","Boo",""],[331.529,-39.543,4.46,46,"λ","Gru",""],[340.129,44.276,4.46,47,"","Lac",""],[343.132,-32.876,4.46,100,"γ","PsA",""],[41.276,-18.572,4.47,66,"τ¹","Eri",""],[50.085,29.048,4.47,47,"","",""],[57.38,65.526,4.47,32,"","",""],[74.322,53.752,4.47,98,"","Cam",""],[74.637,1.714,4.47,47,"π⁶","Ori",""],[101.965,2.412,4.47,50,"","Mon",""],[169.165,-3.652,4.47,82,"φ","Leo",""],[182.022,-50.661,4.47,180,"","",""],[246.796,-47.555,4.47,220,"ε","Nor",""],[346.67,-23.743,4.47,51,"","Aqr",""],[92.985,14.209,4.48,240,"ξ","Ori",""],[94.906,59.011,4.48,95,"","Lyn",""],[97.042,-32.58,4.48,220,"λ","CMa",""],[137.218,51.605,4.48,75,"","UMa",""],[136.287,-72.603,4.48,62,"","",""],[151.858,35.245,4.48,82,"","LMi",""],[167.915,-22.826,4.48,95,"β","Crt",""],[294.11,50.221,4.48,69,"θ","Cyg",""],[336.833,-64.966,4.48,120,"δ","Tuc",""],[66.587,15.618,4.49,75,"","Tau",""],[100.997,13.228,4.49,50,"","Gem",""],[108.14,-46.759,4.49,75,"","",""],[118.161,-38.863,4.49,260,"","",""],[131.677,-56.77,4.49,240,"","",""],[151.985,-0.372,4.49,100,"α","Sex",""],[224.296,-4.346,4.49,75,"","Lib",""],[318.62,10.007,4.49,68,"δ","Equ",""],[333.47,39.715,4.49,46,"","",""],[355.68,-14.545,4.49,120,"ω²","Aqr",""],[98.226,7.333,4.5,100,"","Mon",""],[114.705,-26.802,4.5,180,"","",""],[117.022,-25.937,4.5,300,"ο","Pup",""],[143.706,52.051,4.5,95,"","UMa",""],[155.228,-56.043,4.5,240,"","",""],[163.903,24.75,4.5,98,"","Leo",""],[206.815,17.457,4.5,66,"τ","Boo",""],[246.026,-20.038,4.5,50,"ψ","Oph",""],[316.782,-25.006,4.5,35,"","Cap",""],[332.096,-32.989,4.5,95,"μ","PsA",""],[355.512,1.78,4.5,82,"λ","Psc",""],[359.979,-65.577,4.5,120,"ε","Tuc",""],[17.915,30.09,4.51,50,"τ","Psc",""],[41.977,29.247,4.51,48,"","Ari",""],[60.224,-62.159,4.51,29,"γ","Ret",""],[68.377,-29.767,4.51,50,"υ¹","Eri",""],[87.457,-56.167,4.51,48,"γ","Pic",""],[142.311,-35.951,4.51,46,"ε","Ant",""],[230.845,-59.321,4.51,200,"γ","Cir",""],[300.705,67.874,4.51,46,"ρ","Dra",""],[311.01,-51.921,4.51,82,"η","Ind",""],[311.338,57.58,4.51,63,"","",""],[317.399,-11.372,4.51,52,"ν","Aqr",""],[322.181,-21.807,4.51,55,"","Cap",""],[337.622,43.123,4.51,260,"","Lac",""],[4.582,36.785,4.52,95,"σ","And",""],[37.267,67.403,4.52,88,"ι","Cas",""],[87.294,39.181,4.52,52,"τ","Aur",""],[144.838,-61.328,4.52,120,"","",""],[214.778,-13.371,4.52,95,"λ","Vir",""],[235.388,19.67,4.52,98,"ι","Ser",""],[260.921,37.146,4.52,120,"ρ","Her",""],[299.237,-27.17,4.52,47,"","Sgr",""],[303.942,27.814,4.52,46,"","Vul",""],[346.751,9.409,4.52,34,"","Peg",""],[348.137,49.406,4.52,75,"","And",""],[12.453,41.079,4.53,200,"ν","And",""],[42.878,35.06,4.53,42,"","Per",""],[90.014,-3.074,4.53,48,"","",""],[114.342,-34.969,4.53,140,"","",""],[176.996,20.219,4.53,55,"","Leo",""],[200.658,-60.988,4.53,240,"","",""],[201.002,-64.536,4.53,54,"","",""],[272.808,-45.954,4.53,50,"ε","Tel",""],[311.852,36.491,4.53,200,"λ","Cyg",""],[345.969,3.82,4.53,180,"β","Psc","Fum al Samakah"],[7.89,-62.966,4.54,95,"β²","Tuc",""],[11.181,48.284,4.54,200,"ο","Cas",""],[30.489,70.907,4.54,92,"","Cas",""],[52.479,58.879,4.54,100,"","",""],[79.545,33.372,4.54,47,"","Aur",""],[98.764,-22.965,4.54,100,"ξ²","CMa",""],[112.449,12.007,4.54,48,"","CMi",""],[213.371,51.79,4.54,80,"κ²","Boo",""],[226.111,26.948,4.54,47,"ψ","Boo",""],[228.055,-19.792,4.54,100,"ι¹","Lib",""],[230.789,-36.859,4.54,220,"φ²","Lup",""],[233.972,-44.959,4.54,240,"","",""],[261.658,-5.087,4.54,70,"","",""],[266.89,-27.831,4.54,64,"","Sgr",""],[358.596,57.499,4.54,58,"ρ","Cas",""],[76.102,-35.483,4.55,46,"γ¹","Cae",""],[105.017,76.978,4.55,44,"","",""],[143.556,36.398,4.55,52,"","LMi",""],[222.847,19.101,4.55,52,"ξ","Boo",""],[245.159,-24.169,4.55,88,"ο","Sco",""],[316.65,47.648,4.55,44,"","Cyg",""],[352.289,12.761,4.55,53,"","Peg",""],[0.935,-17.336,4.55,120,"","Cet",""],[59.686,-61.4,4.56,32,"δ","Ret",""],[136.632,38.452,4.56,53,"","",""],[143.62,69.83,4.56,56,"","UMa",""],[207.957,-32.994,4.56,200,"","Cen",""],[216.534,-45.221,4.56,260,"τ¹","Lup",""],[325.48,71.311,4.56,48,"","Cep",""],[84.796,4.121,4.57,240,"ω","Ori",""],[142.995,-1.185,4.57,92,"τ²","Hya",""],[154.903,-55.029,4.57,46,"","",""],[160.884,-60.567,4.57,44,"","",""],[246.354,14.033,4.57,120,"ω","Her","Kajam"],[272.021,-28.457,4.57,53,"","",""],[322.487,23.639,4.57,34,"","Peg",""],[335.257,46.537,4.57,180,"","Lac",""],[336.129,49.476,4.57,120,"","Lac",""],[357.232,-28.13,4.57,100,"δ","Scl",""],[54.274,-40.275,4.58,48,"","",""],[88.332,27.612,4.58,100,"","Tau",""],[137.012,-25.858,4.58,44,"κ","Pyx",""],[147.92,-46.548,4.58,55,"","",""],[265.485,72.149,4.58,68,"ψ¹","Dra","Dsiban"],[298.365,24.08,4.58,120,"","Vul",""],[300.665,-27.71,4.58,29,"","Sgr",""],[10.332,-46.085,4.59,52,"μ","Phe",""],[55.709,-37.314,4.59,47,"","",""],[81.709,3.096,4.59,260,"ψ²","Ori",""],[83.847,-4.838,4.59,280,"","Ori",""],[115.885,-28.411,4.59,46,"","Pup",""],[148.027,54.064,4.59,92,"φ","UMa",""],[238.403,-25.327,4.59,260,"","Sco",""],[243.076,-27.926,4.59,260,"","Sco",""],[263.915,-46.506,4.59,100,"σ","Ara",""],[283.687,22.645,4.59,56,"","Her",""],[287.087,-40.497,4.59,48,"δ","CrA",""],[290.167,65.715,4.59,95,"π","Dra",""],[313.032,27.097,4.59,53,"","Vul",""],[337.207,-0.02,4.59,66,"ζ¹","Aqr",""],[97.204,-7.033,4.6,240,"β","Mon",""],[130.053,64.328,4.6,48,"π²","UMa",""],[142.287,-2.769,4.6,66,"τ¹","Hya",""],[151.281,-13.065,4.6,120,"υ²","Hya",""],[164.18,-37.138,4.6,48,"ι","Ant",""],[168.15,-60.318,4.6,85,"","",""],[198.072,-59.921,4.6,140,"","",""],[221.31,16.964,4.6,52,"ο","Boo",""],[224.396,65.933,4.6,29,"","",""],[231.334,-38.734,4.6,100,"","",""],[294.177,-24.884,4.6,120,"","Sgr",""],[350.159,23.74,4.6,88,"τ","Peg","Salm"],[1.334,-5.708,4.61,50,"","Psc",""],[4.273,38.682,4.61,95,"θ","And",""],[64.561,50.296,4.61,95,"","",""],[119.967,-18.399,4.61,95,"","",""],[166.635,-62.424,4.61,52,"","",""],[290.432,-15.955,4.61,260,"υ","Sgr",""],[308.476,35.251,4.61,47,"","Cyg",""],[28.389,3.188,4.62,50,"ξ","Psc",""],[82.983,-7.301,4.62,300,"υ","Ori","Thabit"],[114.707,-26.804,4.62,200,"","",""],[130.918,-7.234,4.62,59,"","",""],[138.938,-37.413,4.62,68,"","",""],[173.69,-54.264,4.62,120,"","",""],[193.663,-59.147,4.62,220,"λ","Cru",""],[233.545,-10.064,4.62,48,"","Lib",""],[238.169,42.452,4.62,63,"χ","Her",""],[264.461,-8.119,4.62,140,"μ","Oph",""],[270.121,-3.69,4.62,72,"ζ","Ser",""],[284.055,4.204,4.62,88,"θ¹","Ser","Alya"],[14.166,59.181,4.63,52,"υ²","Cas",""],[44.803,21.34,4.63,95,"ε","Ari",""],[44.803,21.34,4.63,95,"ε","Ari",""],[47.822,39.612,4.63,48,"ω","Per",""],[57.59,71.332,4.63,95,"γ","Cam",""],[90.98,20.138,4.63,260,"χ²","Ori",""],[118.265,-49.613,4.63,280,"","",""],[166.254,7.336,4.63,72,"χ","Leo",""],[168.801,23.096,4.63,30,"","Leo",""],[237.399,26.068,4.63,57,"δ","CrB",""],[240.883,-57.775,4.63,82,"ι¹","Nor",""],[246.95,-8.372,4.63,92,"υ","Oph",""],[339.343,51.545,4.63,80,"","Lac",""],[75.774,21.59,4.64,82,"ι","Tau",""],[109.146,-27.881,4.64,30,"","",""],[111.678,49.211,4.64,98,"","Lyn",""],[113.845,-28.369,4.64,140,"","",""],[189.969,-39.988,4.64,140,"","",""],[235.297,-44.661,4.64,68,"","",""],[237.745,-25.751,4.64,240,"","Sco",""],[270.066,4.369,4.64,260,"","Oph",""],[271.827,8.734,4.64,52,"","Oph",""],[277.843,-62.278,4.64,160,"ν","Pav",""],[278.376,-42.312,4.64,52,"θ","CrA",""],[300.275,27.754,4.64,90,"","Vul",""],[18.437,24.584,4.65,50,"φ","Psc",""],[58.427,-24.613,4.65,180,"τ⁸","Eri",""],[68.462,14.844,4.65,80,"ρ","Tau",""],[73.724,10.151,4.65,100,"π¹","Ori",""],[88.525,-63.09,4.65,48,"","",""],[103.661,13.178,4.65,75,"","Gem",""],[112.677,-30.962,4.65,57,"","",""],[191.595,-56.489,4.65,240,"","",""],[206.664,-51.433,4.65,52,"","",""],[207.858,64.723,4.65,30,"","Dra",""],[240.804,-49.23,4.65,52,"η","Nor",""],[252.458,-10.783,4.65,64,"","Oph",""],[259.418,37.292,4.65,95,"","Her",""],[274.513,-27.043,4.65,46,"","",""],[346.046,50.052,4.65,50,"","And",""],[17.863,21.035,4.66,52,"χ","Psc",""],[40.863,27.707,4.66,240,"","Ari",""],[59.981,-24.016,4.66,180,"τ⁹","Eri",""],[100.245,9.896,4.66,390,"","Mon",""],[108.563,-26.353,4.66,240,"","CMa",""],[109.577,-36.734,4.66,260,"","",""],[130.821,21.469,4.66,98,"γ","Cnc","Asellus Borealis"],[156.852,-57.639,4.66,78,"","",""],[159.688,-59.183,4.66,44,"","",""],[180.218,6.614,4.66,88,"π","Vir",""],[189.812,-7.996,4.66,47,"χ","Vir",""],[190.647,-48.813,4.66,50,"","",""],[205.185,54.682,4.66,32,"","UMa",""],[282.8,59.388,4.66,51,"ο","Dra",""],[291.63,0.339,4.66,72,"ν","Aql",""],[336.319,1.377,4.66,280,"π","Aqr",""],[359.44,25.141,4.66,30,"ψ","Peg",""],[27.396,-10.686,4.67,70,"χ","Cet",""],[52.342,49.509,4.67,240,"","Per",""],[91.539,-14.935,4.67,98,"θ","Lep",""],[137.73,63.514,4.67,70,"τ","UMa",""],[234.942,-34.412,4.67,52,"ψ¹","Lup",""],[270.014,16.751,4.67,50,"","Her",""],[315.323,-32.258,4.67,54,"γ","Mic",""],[325.524,51.19,4.67,240,"π¹","Cyg","Azelfafage"],[76.142,15.404,4.68,100,"","Ori",""],[103.906,-20.136,4.68,72,"π","CMa",""],[120.305,-1.393,4.68,44,"","Mon",""],[144.614,4.649,4.68,46,"","",""],[245.087,-78.696,4.68,28,"δ¹","Aps",""],[275.915,-8.934,4.68,51,"ζ","Sct",""],[293.09,69.661,4.68,50,"σ","Dra","Alsafi"],[308.827,14.674,4.68,92,"ζ","Del",""],[324.27,-19.466,4.68,260,"ε","Cap","Kastra"],[28.734,-67.647,4.69,52,"η²","Hyi",""],[31.123,-29.297,4.69,120,"ν","For",""],[66.652,14.714,4.69,53,"π","Tau",""],[69.819,15.918,4.69,88,"σ²","Tau",""],[134.081,-52.724,4.69,200,"","",""],[140.801,-28.834,4.69,52,"λ","Pyx",""],[141.827,-22.344,4.69,47,"","",""],[191.408,-60.981,4.69,50,"ι","Cru",""],[202.991,-6.256,4.69,32,"","Vir",""],[271.255,-29.58,4.69,69,"γ¹","Sgr",""],[294.844,30.153,4.69,52,"φ","Cyg",""],[317.585,10.132,4.69,75,"γ","Equ",""],[324.438,-7.854,4.69,82,"ξ","Aqr","Bunda"],[330.84,-56.786,4.69,44,"ε","Ind",""],[330.829,-2.155,4.69,160,"ο","Aqr",""],[340.897,-18.83,4.69,44,"","Aqr",""],[347.478,-22.457,4.69,58,"","Aqr",""],[44.69,39.663,4.7,95,"π","Per",""],[44.929,8.908,4.7,180,"λ","Cet",""],[114.575,-25.365,4.7,140,"","",""],[150.053,8.044,4.7,32,"π","Leo",""],[174.17,-9.802,4.7,120,"θ","Crt",""],[175.053,-34.745,4.7,120,"ο","Hya",""],[203.614,49.016,4.7,88,"","CVn",""],[277.3,-14.566,4.7,92,"γ","Sct",""],[298.96,-26.299,4.7,55,"ω","Sgr","Terebellum"],[23.483,59.232,4.71,51,"χ","Cas",""],[36.406,50.279,4.71,44,"","And",""],[63.722,40.484,4.71,55,"","Per",""],[79.785,40.099,4.71,59,"λ","Aur",""],[80.112,-21.239,4.71,100,"","",""],[82.433,-1.092,4.71,42,"","Ori",""],[117.085,-47.078,4.71,50,"","",""],[136.41,-70.539,4.71,260,"","",""],[159.68,31.976,4.71,58,"","LMi",""],[163.495,43.19,4.71,98,"ω","UMa",""],[196.57,-48.464,4.71,200,"","",""],[209.412,-63.687,4.71,48,"","",""],[298.562,8.461,4.71,51,"ξ","Aql","Libertas"],[319.485,-32.172,4.71,98,"ε","Mic",""],[343.603,84.346,4.71,44,"","",""],[353.319,-20.914,4.71,98,"","Aqr",""],[353.769,-42.615,4.71,95,"ι","Phe",""],[52.345,-62.938,4.72,68,"κ","Ret",""],[76.377,-57.473,4.72,64,"ζ","Dor",""],[122.818,-12.927,4.72,51,"","Pup",""],[140.373,-25.966,4.72,34,"θ","Pyx",""],[177.06,-66.815,4.72,44,"μ","Mus",""],[181.08,-63.166,4.72,260,"θ²","Cru",""],[226.28,-47.051,4.72,200,"π","Lup",""],[241.623,-45.173,4.72,88,"δ","Nor",""],[280.568,-9.053,4.72,72,"δ","Sct",""],[7.943,54.522,4.73,140,"λ","Cas",""],[52.655,-5.075,4.73,120,"","Eri",""],[57.15,-37.621,4.73,120,"","",""],[80.44,-0.382,4.73,260,"","Ori",""],[176.191,-18.351,4.73,52,"ζ","Crt",""],[199.385,40.573,4.73,70,"","CVn",""],[208.302,-31.928,4.73,220,"","Cen",""],[253.499,-42.362,4.73,280,"ζ¹","Sco",""],[259.153,-0.445,4.73,47,"","Oph",""],[313.163,-8.983,4.73,92,"μ","Aqr",""],[324.48,62.082,4.73,260,"","Cep",""],[325.665,-18.866,4.73,52,"κ","Cap",""],[326.036,28.743,4.73,66,"μ¹","Cyg",""],[21.483,68.13,4.74,50,"ψ","Cas",""],[73.133,14.251,4.74,30,"ο¹","Ori",""],[87.76,37.306,4.74,35,"υ","Aur",""],[156.479,33.796,4.74,75,"","LMi",""],[157.584,-71.993,4.74,98,"","",""],[165.457,-2.485,4.74,35,"","Leo",""],[185.179,17.793,4.74,52,"","Com",""],[199.601,-18.311,4.74,54,"","Vir",""],[207.948,34.444,4.74,42,"","",""],[235.487,-19.679,4.74,35,"κ","Lib",""],[292.943,34.453,4.74,240,"","Cyg",""],[314.957,47.521,4.74,280,"","Cyg",""],[341.871,83.154,4.74,46,"","",""],[354.463,-45.492,4.74,95,"","",""],[28.382,19.294,4.75,98,"γ²","Ari","Mesarthim"],[38.022,-15.245,4.75,69,"σ","Cet",""],[39.95,-42.892,4.75,95,"","",""],[42.76,-21.004,4.75,50,"τ²","Eri","Angetenar"],[42.619,-75.067,4.75,46,"ν","Hyi",""],[122.858,-42.987,4.75,88,"","",""],[158.308,40.426,4.75,82,"","",""],[212.478,-53.439,4.75,51,"","",""],[214.041,51.367,4.75,78,"ι","Boo","Asellus Secundus"],[235.671,-34.711,4.75,200,"ψ²","Lup",""],[285.779,-42.095,4.75,120,"ζ","CrA",""],[349.656,68.112,4.75,50,"ο","Cep",""],[11.047,-10.609,4.76,50,"φ¹","Cet",""],[19.867,27.264,4.76,92,"υ","Psc",""],[46.385,56.706,4.76,51,"","",""],[83.182,32.192,4.76,200,"χ","Aur",""],[108.659,-48.272,4.76,140,"","",""],[122.253,-61.302,4.76,68,"","",""],[135.636,67.63,4.76,30,"ρ","UMa",""],[201.863,-15.974,4.76,50,"","Vir",""],[225.948,47.654,4.76,62,"","Boo",""],[237.816,20.978,4.76,42,"ρ","Ser",""],[240.7,46.037,4.76,120,"υ","Her",""],[242.243,36.491,4.76,48,"τ","CrB",""],[269.948,-23.816,4.76,120,"","Sgr",""],[305.166,-12.759,4.76,120,"ν","Cap","Alshat"],[308.895,-60.582,4.76,74,"φ¹","Pav",""],[346.778,25.468,4.76,52,"","Peg",""],[7.854,-48.804,4.77,100,"λ¹","Phe",""],[13.252,-1.144,4.77,35,"","Cet",""],[101.832,8.037,4.77,44,"","Mon",""],[130.305,-47.317,4.77,88,"","",""],[145.321,-23.592,4.77,180,"","",""],[172.579,-3.004,4.77,46,"","Leo",""],[215.177,-45.187,4.77,75,"","",""],[215.774,-27.754,4.77,44,"","Hya",""],[241.092,-11.373,4.77,68,"ξ","Sco","Graffias"],[265.098,-49.416,4.77,70,"λ","Ara",""],[278.144,57.046,4.77,64,"","Dra",""],[289.054,21.39,4.77,220,"","Vul",""],[300.89,-37.941,4.77,42,"","",""],[67.64,16.194,4.78,85,"","",""],[73.158,36.703,4.78,47,"","Aur",""],[83.761,-6.002,4.78,300,"","",""],[88.11,1.855,4.78,48,"","Ori",""],[123.373,-35.9,4.78,280,"","",""],[169.783,38.186,4.78,98,"","UMa",""],[194.731,17.409,4.78,34,"","Com",""],[244.575,-28.614,4.78,100,"","",""],[260.498,-67.771,4.78,47,"ζ","Aps",""],[303.816,25.592,4.78,240,"","",""],[307.215,-17.814,4.78,72,"ρ","Cap",""],[313.312,44.387,4.78,200,"","Cyg",""],[0.399,-77.066,4.78,46,"θ","Oct",""],[29.482,23.596,4.79,75,"λ","Ari",""],[58.573,-2.955,4.79,52,"","Eri",""],[74.983,-12.537,4.79,75,"","Eri",""],[99.833,42.489,4.79,46,"ψ²","Aur",""],[109.153,-23.316,4.79,46,"","",""],[119.417,-30.335,4.79,95,"","",""],[139.943,-11.975,4.79,52,"","Hya",""],[146.05,-27.769,4.79,80,"θ","Ant",""],[154.934,19.471,4.79,66,"","Leo",""],[193.588,-9.539,4.79,30,"ψ","Vir",""],[247.552,-25.115,4.79,260,"","Sco",""],[281.362,-64.871,4.79,88,"","",""],[332.452,72.341,4.79,53,"","Cep",""],[333.904,-41.347,4.79,52,"μ¹","Gru",""],[336.965,4.696,4.79,50,"","Peg",""],[340.439,29.308,4.79,98,"ο","Peg",""],[3.651,20.207,4.8,32,"χ","Peg",""],[10.516,50.513,4.8,260,"ξ","Cas",""],[48.958,-8.82,4.8,88,"ζ","Eri","Zibal"],[56.51,63.345,4.8,60,"","",""],[66.024,17.444,4.8,82,"δ²","Tau",""],[84.721,-7.213,4.8,90,"","Ori",""],[94.712,69.32,4.8,100,"","",""],[137.597,67.135,4.8,66,"σ²","UMa",""],[140.121,-9.556,4.8,52,"","Hya",""],[186.006,51.562,4.8,54,"","CVn",""],[196.795,27.625,4.8,42,"","Com",""],[198.812,-67.894,4.8,140,"η","Mus",""],[199.401,5.47,4.8,34,"σ","Vir",""],[264.238,68.758,4.8,68,"ω","Dra",""],[359.603,51.389,4.8,24,"","",""],[6.982,-33.007,4.81,29,"η","Scl",""],[75.36,-7.174,4.81,240,"ψ","Eri",""],[92.575,-54.969,4.81,240,"δ","Pic",""],[140.237,-62.405,4.81,54,"","",""],[143.766,39.621,4.81,51,"","",""],[185.626,25.846,4.81,60,"","Com",""],[188.713,22.629,4.81,100,"","Com",""],[214.499,35.509,4.81,50,"","",""],[217.05,-2.228,4.81,58,"φ","Vir",""],[220.856,26.528,4.81,30,"","Boo",""],[225.527,25.008,4.81,44,"ω","Boo",""],[262.854,-23.963,4.81,120,"","Oph",""],[267.547,-40.091,4.81,95,"ι²","Sco",""],[276.337,-20.542,4.81,47,"","Sgr",""],[304.447,38.033,4.81,260,"","Cyg",""],[335.33,28.331,4.81,120,"","Peg",""],[338.25,-61.982,4.81,29,"ν","Tuc",""],[13.267,61.124,4.82,63,"","",""],[32.122,37.859,4.82,88,"","And",""],[49.682,34.223,4.82,47,"","",""],[77.425,15.597,4.82,72,"","Ori",""],[89.499,25.954,4.82,300,"","Tau",""],[99.82,-14.146,4.82,47,"","",""],[120.083,-63.568,4.82,240,"","",""],[125.632,-48.49,4.82,280,"","",""],[159.388,-13.384,4.82,40,"","",""],[160.558,-64.466,4.82,220,"","",""],[161.029,-63.961,4.82,200,"","",""],[186.632,-51.451,4.82,240,"","",""],[204.365,36.295,4.82,82,"","CVn",""],[212.212,77.547,4.82,46,"","UMi",""],[226.28,-47.051,4.82,200,"π","Lup",""],[228.206,-44.501,4.82,240,"","",""],[237.808,35.657,4.82,48,"κ","CrB",""],[245.518,1.029,4.82,75,"σ","Ser",""],[252.309,45.983,4.82,95,"","Her",""],[255.265,-4.223,4.82,44,"","Oph",""],[259.331,33.1,4.82,280,"","Her",""],[276.496,65.564,4.82,48,"","Dra","Fafnir"],[283.6,71.297,4.82,50,"υ","Dra",""],[309.63,21.201,4.82,100,"","Vul",""],[320.19,-40.81,4.82,88,"θ¹","Mic",""],[337.662,-10.678,4.82,100,"σ","Aqr",""],[355.441,-17.816,4.82,60,"","Aqr",""],[13.75,58.973,4.83,47,"υ¹","Cas",""],[21.914,45.407,4.83,68,"ω","And",""],[28.382,19.296,4.83,120,"γ¹","Ari",""],[29.292,-47.385,4.83,52,"","",""],[33.305,44.232,4.83,46,"","And",""],[49.84,3.37,4.83,55,"κ¹","Cet",""],[79.371,-34.895,4.83,50,"ο","Col",""],[78.439,-67.185,4.83,47,"θ","Dor",""],[103.387,-20.224,4.83,280,"","CMa",""],[107.213,-39.656,4.83,260,"","",""],[125.346,-33.054,4.83,47,"","",""],[139.047,54.022,4.83,88,"","UMa",""],[155.582,-41.65,4.83,48,"","",""],[171.153,-10.859,4.83,42,"ε","Crt",""],[212.6,25.092,4.83,62,"","Boo",""],[220.287,13.728,4.83,95,"ζ","Boo",""],[240.574,22.804,4.83,92,"π","Ser",""],[250.23,64.589,4.83,50,"","Dra",""],[267.294,-31.703,4.83,140,"","",""],[281.519,26.662,4.83,46,"","",""],[283.543,-22.745,4.83,47,"ν¹","Sgr",""],[284.265,-5.846,4.83,47,"η","Sct",""],[299.738,-26.196,4.83,54,"","Sgr",""],[303.325,46.816,4.83,88,"","Cyg",""],[22.546,6.144,4.84,44,"μ","Psc",""],[30.978,42.331,4.84,140,"γ²","And",""],[39.891,-11.872,4.84,68,"ε","Cet",""],[41.386,-67.617,4.84,95,"ζ","Hyi",""],[49.998,65.652,4.84,260,"","",""],[63.485,9.264,4.84,55,"","Tau",""],[114.864,-38.308,4.84,260,"","",""],[122.114,51.507,4.84,95,"","Lyn",""],[157.657,55.981,4.84,63,"","UMa",""],[158.773,75.713,4.84,52,"","",""],[165.14,3.618,4.84,48,"","Leo",""],[248.151,11.488,4.84,40,"","Her",""],[312.235,46.114,4.84,240,"","Cyg",""],[316.101,-19.855,4.84,88,"η","Cap","Armus"],[331.42,5.059,4.84,44,"ν","Peg",""],[29.168,-22.527,4.85,44,"","Cet",""],[65.388,46.499,4.85,220,"","Per",""],[112.464,-23.024,4.85,88,"","",""],[161.713,-64.383,4.85,240,"","",""],[176.321,8.258,4.85,90,"ξ","Vir",""],[195.888,-49.527,4.85,100,"ξ¹","Cen",""],[198.013,-37.803,4.85,57,"","",""],[245.524,30.892,4.85,50,"ξ","CrB",""],[251.324,56.782,4.85,72,"","",""],[288.885,-25.257,4.85,52,"ψ","Sgr",""],[340.875,-41.414,4.85,50,"ρ","Gru",""],[341.408,-53.5,4.85,47,"η","Gru",""],[346.654,59.42,4.85,300,"","Cas",""],[349.436,49.015,4.85,32,"","And",""],[18.942,-68.876,4.86,66,"κ","Tuc",""],[38.969,5.593,4.86,52,"ν","Cet",""],[78.357,38.484,4.86,90,"μ","Aur",""],[85.324,16.534,4.86,240,"","Tau",""],[87.254,24.567,4.86,52,"","Tau",""],[128.832,-58.009,4.86,50,"","",""],[130.606,-53.114,4.86,240,"","",""],[152.235,-51.811,4.86,240,"","",""],[186.629,-63.123,4.86,220,"","",""],[214.938,16.307,4.86,46,"","Boo",""],[220.412,8.162,4.86,53,"","Boo",""],[229.412,-63.611,4.86,47,"ε","Cir",""],[269.197,-44.342,4.86,47,"","",""],[275.217,3.377,4.86,52,"","Oph",""],[296.59,-19.761,4.86,48,"","Sgr",""],[359.668,-3.556,4.86,51,"","Psc",""],[34.263,34.224,4.87,60,"δ","Tri",""],[47.985,74.394,4.87,95,"","",""],[63.599,-10.256,4.87,46,"","Eri",""],[88.279,-33.801,4.87,200,"λ","Col",""],[101.559,59.442,4.87,92,"","Lyn",""],[169.545,31.529,4.87,60,"ξ","UMa",""],[199.304,-66.784,4.87,47,"","",""],[256.206,-34.123,4.87,280,"","",""],[263.067,55.173,4.87,90,"ν²","Dra","Kuma"],[265.857,-21.683,4.87,66,"","Oph",""],[281.081,-35.642,4.87,260,"","",""],[284.615,-52.939,4.87,100,"λ","Tel",""],[284.681,-37.108,4.87,72,"ε","CrA",""],[356.765,58.652,4.87,48,"τ","Cas",""],[20.585,45.529,4.88,50,"ξ","And","Adhil"],[49.592,-22.511,4.88,54,"","Eri",""],[72.477,37.488,4.88,46,"","",""],[81.909,21.937,4.88,260,"","Tau",""],[116.531,18.51,4.88,44,"","Gem",""],[130.43,-15.943,4.88,51,"","Hya",""],[148.551,-25.933,4.88,47,"","",""],[190.471,10.236,4.88,100,"ρ","Vir",""],[239.548,-14.279,4.88,200,"","Lib",""],[263.044,55.184,4.88,85,"ν¹","Dra",""],[269.449,-41.716,4.88,35,"","",""],[309.397,-61.53,4.88,68,"ρ","Pav",""],[339.815,39.05,4.88,330,"","Lac",""],[359.752,55.755,4.88,280,"σ","Cas",""],[2.816,-15.468,4.89,64,"","Cet",""],[12.209,50.968,4.89,120,"ν","Cas",""],[36.487,-12.291,4.89,120,"ρ","Cet",""],[48.725,21.044,4.89,98,"ζ","Ari",""],[108.306,-45.183,4.89,100,"","",""],[129.927,-29.561,4.89,56,"ζ","Pyx",""],[133.881,-27.682,4.89,92,"δ","Pyx",""],[157.841,-53.716,4.89,66,"","",""],[159.307,-27.412,4.89,32,"","",""],[240.851,-38.602,4.89,180,"","",""],[254.007,65.135,4.89,66,"","Dra",""],[296.069,37.354,4.89,53,"","Cyg",""],[309.182,-2.55,4.89,42,"","Aql",""],[312.371,-46.227,4.89,42,"ζ","Ind",""],[21.405,-14.599,4.9,47,"","Cet",""],[38.461,-28.232,4.9,120,"ω","For",""],[94.998,-2.944,4.9,34,"","",""],[104.405,45.094,4.9,95,"","Lyn",""],[107.914,39.321,4.9,44,"","Aur",""],[114.791,34.584,4.9,70,"ο","Gem",""],[177.963,-65.206,4.9,220,"","",""],[193.324,21.245,4.9,52,"","Com",""],[195.069,30.785,4.9,51,"","Com",""],[249.687,48.928,4.9,32,"","Her",""],[280.88,-8.275,4.9,52,"ε","Sct",""],[293.804,-48.099,4.9,50,"ι","Tel",""],[312.492,-33.78,4.9,53,"α","Mic",""],[323.694,38.534,4.9,50,"","Cyg",""],[343.807,8.816,4.9,98,"ρ","Peg",""],[40.562,40.194,4.91,62,"","Per",""],[67.97,-0.044,4.91,46,"","Eri",""],[75.357,-20.052,4.91,120,"","",""],[85.619,1.475,4.91,48,"","Ori",""],[87.387,12.651,4.91,120,"","Tau",""],[96.225,49.288,4.91,42,"ψ¹","Aur",""],[159.646,-16.877,4.91,52,"φ³","Hya",""],[176.63,-40.501,4.91,57,"","",""],[179.905,-78.222,4.91,120,"ε","Cha",""],[192.672,-33.999,4.91,100,"","",""],[207.428,21.264,4.91,44,"","Boo",""],[212.71,-16.302,4.91,32,"","",""],[214.558,-81.008,4.91,95,"η","Aps",""],[228.655,-31.519,4.91,74,"","Lup",""],[247.117,-70.084,4.91,62,"ζ","TrA",""],[256.345,12.741,4.91,90,"","Her",""],[307.413,-2.886,4.91,47,"","Aql",""],[311.219,25.271,4.91,47,"","Vul",""],[329.163,63.626,4.91,32,"","",""],[352.508,58.549,4.91,240,"","",""],[107.557,-4.237,4.92,50,"","Mon",""],[134.243,-59.229,4.92,260,"","",""],[198.562,-59.103,4.92,64,"","",""],[198.429,40.153,4.92,52,"","",""],[215.654,-58.459,4.92,52,"","",""],[221.247,-35.192,4.92,100,"","",""],[225.243,-8.519,4.92,120,"δ","Lib","Zuben-el-Akribi"],[241.36,-19.802,4.92,260,"β²","Sco",""],[283.307,50.708,4.92,53,"","",""],[298.908,52.439,4.92,90,"ψ","Cyg",""],[311.795,34.374,4.92,46,"","",""],[332.537,-32.548,4.92,66,"τ","PsA",""],[44.765,35.183,4.93,47,"","Per",""],[62.711,-41.994,4.93,78,"δ","Hor",""],[65.103,34.567,4.93,52,"","Per",""],[91.246,-16.484,4.93,95,"","Lep",""],[99.657,-48.22,4.93,52,"","",""],[105.974,-49.584,4.93,90,"","",""],[119.934,-3.68,4.93,47,"","Mon",""],[132.449,-45.308,4.93,95,"","",""],[157.758,-73.222,4.93,44,"","",""],[190.486,-59.686,4.93,180,"","",""],[195.183,56.366,4.93,72,"","UMa",""],[226.825,24.869,4.93,68,"","Boo",""],[285.004,32.146,4.93,47,"λ","Lyr",""],[286.605,-37.063,4.93,63,"γ","CrA",""],[302.357,36.84,4.93,260,"","Cyg",""],[355.998,29.362,4.93,50,"","Peg",""],[10.867,47.025,4.94,88,"π","Cas",""],[25.145,40.577,4.94,140,"τ","And",""],[33.093,30.303,4.94,55,"","Tri",""],[64.315,20.579,4.94,92,"ω²","Tau",""],[74.814,37.89,4.94,98,"ω","Aur",""],[79.819,22.096,4.94,52,"","Tau",""],[113.915,-52.534,4.94,46,"","",""],[115.097,-15.264,4.94,46,"","",""],[120.88,27.794,4.94,48,"χ","Gem",""],[138.903,-38.57,4.94,50,"","",""],[145.56,-23.916,4.94,62,"","",""],[148.718,-19.009,4.94,34,"","",""],[166.333,-27.294,4.94,70,"χ¹","Hya",""],[175.223,-62.09,4.94,57,"","",""],[188.683,70.022,4.94,46,"","Dra",""],[192.925,27.541,4.94,60,"","Com",""],[203.533,3.659,4.94,98,"","Vir",""],[220.182,16.418,4.94,120,"π¹","Boo",""],[221.5,-25.443,4.94,72,"","Hya",""],[222.754,-2.299,4.94,52,"","Lib",""],[231.05,-10.322,4.94,68,"ε","Lib",""],[243.37,-54.631,4.94,52,"κ","Nor",""],[243.0,-10.064,4.94,92,"ψ","Sco",""],[248.521,-44.045,4.94,300,"μ","Nor",""],[298.965,38.487,4.94,200,"","Cyg",""],[301.847,-52.881,4.94,34,"ξ","Tel",""],[343.008,43.312,4.94,35,"","Lac",""],[351.733,1.256,4.94,100,"κ","Psc",""],[1.125,-10.509,4.94,46,"","Cet",""],[25.447,42.614,4.95,59,"","",""],[50.36,43.329,4.95,92,"","Per",""],[65.089,27.351,4.95,48,"φ","Tau",""],[81.187,1.846,4.95,280,"ψ¹","Ori",""],[85.211,-1.129,4.95,260,"","",""],[90.46,-10.598,4.95,200,"","Mon",""],[93.014,16.131,4.95,200,"","Ori",""],[104.067,-48.721,4.95,34,"","",""],[171.984,2.856,4.95,53,"τ","Leo",""],[184.085,23.945,4.95,52,"","Com",""],[186.6,27.268,4.95,75,"","Com",""],[187.528,69.201,4.95,30,"","Dra",""],[197.264,-23.118,4.95,48,"ψ","Hya",""],[239.447,54.75,4.95,75,"","",""],[244.376,75.755,4.95,68,"η","UMi",""],[275.075,21.961,4.95,34,"","Her",""],[294.223,-7.027,4.95,300,"κ","Aql",""],[297.767,22.61,4.95,260,"","Vul",""],[303.569,15.197,4.95,95,"ρ","Aql",""],[307.515,48.952,4.95,260,"ω¹","Cyg",""],[344.108,49.734,4.95,42,"","",""],[356.509,46.42,4.95,55,"ψ","And",""],[18.796,-45.531,4.96,63,"ν","Phe",""],[112.768,82.411,4.96,29,"","",""],[110.556,-19.017,4.96,160,"","",""],[185.088,3.312,4.96,50,"","Vir",""],[235.07,-23.818,4.96,46,"","Lib",""],[232.854,77.349,4.96,42,"θ","UMi",""],[250.393,-17.742,4.96,53,"","",""],[270.377,21.596,4.96,88,"","Her",""],[277.939,-45.915,4.96,180,"δ¹","Tel",""],[289.409,-18.953,4.96,52,"","Sgr",""],[298.981,58.846,4.96,42,"","",""],[55.594,33.965,4.97,300,"","Per",""],[60.326,-61.079,4.97,44,"ι","Ret",""],[67.11,16.36,4.97,47,"","Tau",""],[88.875,-37.121,4.97,48,"ξ","Col",""],[113.45,-14.524,4.97,32,"","",""],[118.374,26.766,4.97,92,"φ","Gem",""],[136.493,5.092,4.97,47,"ω","Hya",""],[142.986,11.3,4.97,50,"ξ","Leo",""],[156.033,65.566,4.97,100,"","",""],[177.486,-70.226,4.97,54,"","",""],[202.428,-23.281,4.97,24,"","",""],[207.468,-18.134,4.97,50,"","Vir",""],[217.043,-29.492,4.97,140,"","Hya",""],[272.976,31.405,4.97,30,"","Her",""],[291.032,29.621,4.97,240,"","Cyg",""],[303.633,36.806,4.97,95,"","Cyg",""],[20.02,58.232,4.98,75,"φ","Cas",""],[24.837,44.386,4.98,52,"χ","And",""],[32.355,25.94,4.98,72,"","Ari",""],[52.013,49.063,4.98,200,"","",""],[94.478,61.515,4.98,30,"","Lyn",""],[109.668,-24.559,4.98,390,"","CMa",""],[130.006,-12.475,4.98,44,"","Hya",""],[202.107,13.779,4.98,56,"","Vir",""],[203.699,37.182,4.98,72,"","",""],[255.783,14.092,4.98,30,"","",""],[272.931,-23.701,4.98,50,"","Sgr",""],[275.977,58.801,4.98,98,"","Dra",""],[284.061,4.202,4.98,88,"θ²","Ser",""],[349.74,-9.611,4.98,100,"ψ³","Aqr",""],[351.21,62.283,4.98,34,"","Cas",""],[353.488,31.325,4.98,44,"","Peg",""],[25.681,-3.69,4.99,46,"","",""],[29.0,68.685,4.99,140,"ω","Cas",""],[44.699,-64.071,4.99,92,"β","Hor",""],[81.163,37.386,4.99,44,"σ","Aur",""],[81.106,17.383,4.99,63,"","Tau",""],[88.712,55.707,4.99,95,"ξ","Aur",""],[102.718,-34.367,4.99,42,"","",""],[105.728,-4.239,4.99,280,"","Mon",""],[111.412,9.276,4.99,54,"ε","CMi",""],[115.752,58.71,4.99,92,"","Lyn",""],[123.333,-15.788,4.99,55,"","Pup",""],[127.365,-44.725,4.99,260,"","",""],[155.742,-66.902,4.99,140,"","",""],[165.187,6.101,4.99,88,"","Leo",""],[170.707,43.483,4.99,53,"","UMa",""],[191.283,45.44,4.99,32,"","",""],[239.876,-41.744,4.99,50,"","",""],[240.361,29.851,4.99,100,"ι","CrB",""],[244.254,-50.068,4.99,62,"γ¹","Nor",""],[283.78,-22.671,4.99,46,"ν²","Sgr",""],[286.605,-37.063,4.99,63,"γ","CrA",""],[288.48,57.705,4.99,47,"","Dra",""],[296.607,33.728,4.99,64,"","Cyg",""],[301.082,-32.056,4.99,48,"","",""],[332.108,-34.044,4.99,34,"υ","PsA",""],[55.562,-31.938,5.0,200,"δ","For",""],[59.285,61.109,5.0,46,"","",""],[76.669,51.598,5.0,75,"","Aur",""],[76.862,18.645,5.0,56,"","Tau",""],[80.708,3.544,5.0,280,"","Ori",""],[104.028,-14.044,5.0,55,"μ","CMa",""],[108.343,16.159,5.0,29,"","Gem",""],[137.768,-44.868,5.0,200,"","",""],[144.303,6.836,5.0,48,"","Leo",""],[160.767,69.076,5.0,46,"","",""],[170.803,-36.165,5.0,41,"","",""],[184.125,33.061,5.0,50,"","",""],[184.749,-55.143,5.0,34,"","",""],[186.747,26.826,5.0,90,"","Com",""],[230.535,-47.928,5.0,63,"ν¹","Lup",""],[240.836,-25.865,5.0,42,"","",""],[242.019,17.047,5.0,52,"κ","Her",""],[246.996,68.768,5.0,100,"","Dra",""],[260.079,18.057,5.0,32,"","",""],[271.87,43.462,5.0,52,"","",""],[293.645,19.773,5.0,140,"","Vul",""],[297.245,19.142,5.0,92,"ζ","Sge",""],[319.613,43.946,5.0,390,"","Cyg",""],[345.021,56.945,5.0,56,"","",""],[354.946,-14.222,5.0,75,"ω¹","Aqr",""],[359.397,-64.298,5.0,98,"η","Tuc",""],[35.718,-73.646,5.01,48,"κ","Hyi",""],[69.723,-12.123,5.01,95,"","",""],[93.937,-13.718,5.01,120,"","",""],[92.812,-65.589,5.01,32,"η²","Dor",""],[112.453,27.916,5.01,47,"","Gem",""],[118.065,-34.705,5.01,68,"","",""],[128.682,-49.944,5.01,48,"","",""],[143.302,-21.116,5.01,50,"","",""],[143.537,-51.255,5.01,280,"","",""],[205.436,-54.56,5.01,140,"","",""],[205.403,-8.703,5.01,34,"","Vir",""],[209.142,27.492,5.01,46,"","Boo",""],[213.066,2.409,5.01,100,"","",""],[285.36,46.935,5.01,82,"","Lyr",""],[290.137,-5.416,5.01,52,"","Aql",""],[313.64,28.058,5.01,44,"","Vul",""],[324.238,40.414,5.01,88,"","Cyg",""],[326.934,-30.898,5.01,95,"θ","PsA",""],[335.38,12.205,5.01,260,"","Peg",""],[0.583,-29.72,5.01,220,"ζ","Scl",""],[75.541,-26.275,5.02,48,"","",""],[78.852,32.688,5.02,78,"","Aur",""],[91.882,-37.253,5.02,120,"θ","Col","Al Kurud"],[100.771,44.524,5.02,42,"ψ⁴","Aur",""],[102.691,41.781,5.02,46,"ψ⁷","Aur",""],[158.237,-47.003,5.02,44,"","",""],[186.462,39.019,5.02,51,"","CVn",""],[188.783,18.377,5.02,47,"","Com",""],[229.275,71.824,5.02,44,"","UMi",""],[232.732,40.833,5.02,44,"ν¹","Boo",""],[232.946,40.899,5.02,88,"ν²","Boo",""],[246.397,-23.447,5.02,260,"ρ","Oph",""],[267.268,50.781,5.02,95,"","Dra",""],[281.208,2.06,5.02,120,"","Aql",""],[299.488,-15.491,5.02,92,"","Sgr",""],[318.335,-70.126,5.02,34,"ο","Pav",""],[2.58,46.072,5.03,72,"","And",""],[17.004,43.942,5.03,92,"","And",""],[31.641,22.648,5.03,95,"κ","Ari",""],[34.737,28.642,5.03,95,"","Tri",""],[49.051,50.938,5.03,54,"","",""],[49.782,50.095,5.03,200,"","Per",""],[59.356,63.072,5.03,120,"","",""],[67.209,13.047,5.03,82,"","Tau",""],[72.548,-16.217,5.03,50,"","Eri",""],[76.242,-49.578,5.03,42,"η²","Pic",""],[80.004,33.958,5.03,88,"","Aur",""],[89.768,-9.558,5.03,85,"","Mon",""],[109.206,-36.593,5.03,260,"","",""],[110.869,25.051,5.03,52,"","Gem",""],[163.935,33.507,5.03,48,"","UMa",""],[175.88,-62.489,5.03,60,"","",""],[223.213,-37.803,5.03,160,"","",""],[238.334,-20.167,5.03,260,"λ","Lib",""],[255.47,-32.144,5.03,140,"","",""],[259.654,10.864,5.03,44,"","",""],[273.474,64.397,5.03,68,"","Dra",""],[291.319,-24.509,5.03,88,"χ¹","Sgr",""],[292.666,-2.789,5.03,34,"","Aql",""],[297.657,52.988,5.03,46,"","Cyg",""],[329.812,73.18,5.03,68,"","Cep",""],[339.439,-4.228,5.03,47,"κ","Aqr","Situla"],[26.526,-53.522,5.04,98,"","",""],[30.575,54.488,5.04,140,"","Per",""],[90.815,-26.284,5.04,46,"","",""],[94.111,12.272,5.04,68,"","Ori",""],[116.487,-14.564,5.04,75,"","Pup",""],[173.225,-31.087,5.04,32,"","",""],[181.194,-76.519,5.04,44,"κ","Cha",""],[198.015,-16.199,5.04,68,"","Vir",""],[247.16,41.882,5.04,26,"","Her",""],[252.939,24.656,5.04,50,"","Her",""],[267.363,76.963,5.04,66,"","Dra",""],[271.756,30.562,5.04,64,"","Her",""],[280.658,55.539,5.04,120,"","Dra",""],[309.633,24.116,5.04,200,"","Vul",""],[312.52,44.059,5.04,90,"","Cyg",""],[327.461,30.174,5.04,98,"","Peg",""],[332.878,59.414,5.04,420,"λ","Cep",""],[356.598,3.487,5.04,40,"","Psc",""],[356.978,67.807,5.04,98,"","",""],[69.978,53.08,5.05,50,"","Cam",""],[70.515,-37.144,5.05,74,"β","Cae",""],[80.64,79.231,5.05,66,"","",""],[91.764,-62.155,5.05,47,"","",""],[92.966,-6.55,5.05,260,"","",""],[109.633,49.465,5.05,90,"","",""],[112.335,28.118,5.05,90,"","Gem",""],[114.869,17.675,5.05,42,"","Gem",""],[121.668,-45.266,5.05,46,"","",""],[129.783,-22.662,5.05,54,"","",""],[148.127,-8.105,5.05,98,"γ","Sex",""],[164.867,40.43,5.05,59,"","UMa","Chalawan"],[201.28,-74.888,5.05,50,"ι¹","Mus",""],[262.991,68.135,5.05,50,"","Dra",""],[275.386,49.122,5.05,32,"","",""],[290.713,-54.424,5.05,100,"η","Tel",""],[300.34,50.105,5.05,48,"","Cyg",""],[309.782,10.086,5.05,58,"κ","Del",""],[312.875,-51.608,5.05,48,"ι","Ind",""],[350.086,5.381,5.05,47,"","Psc",""],[7.012,17.893,5.06,30,"","Psc",""],[48.193,-1.196,5.06,63,"","Cet",""],[61.113,59.156,5.06,75,"","",""],[80.442,-24.773,5.06,53,"","",""],[92.184,-68.843,5.06,140,"ν","Dor",""],[96.99,-4.762,5.06,260,"","Mon",""],[104.605,-34.112,5.06,240,"","",""],[115.738,-45.173,5.06,54,"","",""],[145.077,-14.332,5.06,200,"κ","Hya",""],[202.355,-51.165,5.06,98,"","",""],[215.595,-80.109,5.06,220,"ε","Aps",""],[229.828,1.765,5.06,63,"","Ser",""],[271.508,22.219,5.06,30,"","Her",""],[281.085,39.67,5.06,90,"ε¹","Lyr",""],[295.63,-16.124,5.06,74,"","Sgr",""],[295.209,45.525,5.06,68,"","",""],[349.212,-7.727,5.06,30,"χ","Aqr",""],[355.843,10.331,5.06,32,"","Peg",""],[12.245,16.941,5.07,63,"","Psc",""],[12.148,-74.923,5.07,42,"λ","Hyi",""],[57.068,11.143,5.07,240,"","Tau",""],[67.709,-44.954,5.07,260,"δ","Cae",""],[69.788,15.8,5.07,90,"σ¹","Tau",""],[75.086,81.194,5.07,46,"","",""],[78.851,-26.943,5.07,120,"","",""],[81.912,34.476,5.07,46,"φ","Aur",""],[101.905,-8.998,5.07,34,"","",""],[115.127,87.02,5.07,32,"","",""],[124.579,-65.613,5.07,48,"","",""],[142.99,9.716,5.07,47,"","Leo",""],[213.737,-57.086,5.07,220,"","",""],[234.845,36.636,5.07,160,"ζ²","CrB",""],[241.092,-11.373,5.07,68,"ξ","Sco",""],[258.837,-26.601,5.07,50,"","Oph",""],[278.008,-45.757,5.07,240,"δ²","Tel",""],[301.723,23.614,5.07,240,"","Vul",""],[9.035,54.169,5.08,160,"","",""],[76.535,58.973,5.08,260,"","Cam",""],[81.12,-0.891,5.08,51,"","Ori",""],[83.845,-5.416,5.08,330,"θ²","Ori",""],[116.854,-38.511,5.08,260,"","",""],[123.493,-36.323,5.08,280,"","",""],[147.488,-45.733,5.08,160,"","",""],[151.547,-47.37,5.08,48,"","",""],[158.504,-23.745,5.08,44,"","Hya",""],[158.7,6.954,5.08,52,"","Leo",""],[159.085,-59.565,5.08,48,"","",""],[160.854,23.188,5.08,92,"","LMi",""],[165.21,39.212,5.08,75,"","UMa",""],[172.146,-42.674,5.08,120,"","",""],[213.192,-27.261,5.08,46,"","Hya",""],[249.057,52.924,5.08,120,"","Dra",""],[257.676,-44.557,5.08,52,"","",""],[257.389,40.777,5.08,46,"","",""],[284.335,-20.656,5.08,100,"ξ¹","Sgr",""],[328.324,-13.552,5.08,74,"μ","Cap",""],[328.266,25.925,5.08,240,"","Peg",""],[338.942,73.643,5.08,70,"","Cep",""],[341.023,41.819,5.08,50,"","Lac",""],[349.778,-13.459,5.08,55,"","Aqr",""],[350.769,12.314,5.08,46,"","Peg",""],[358.122,19.12,5.08,32,"φ","Peg",""],[8.182,-63.031,5.09,100,"β³","Tuc",""],[50.688,20.742,5.09,46,"τ²","Ari",""],[52.501,55.452,5.09,98,"","",""],[57.297,24.137,5.09,140,"","Tau","Pleione"],[92.56,-74.753,5.09,54,"α","Men",""],[119.327,-44.11,5.09,260,"","",""],[126.902,-53.089,5.09,78,"","",""],[147.148,46.021,5.09,60,"","",""],[157.573,-0.637,5.09,180,"β","Sex",""],[170.841,-18.78,5.09,68,"λ","Crt",""],[201.533,-39.755,5.09,50,"","",""],[229.236,-60.958,5.09,360,"δ","Cir",""],[238.873,-68.603,5.09,55,"κ","TrA",""],[286.744,11.071,5.09,140,"","Aql",""],[326.251,-9.082,5.09,52,"","Cap",""],[29.338,17.817,5.1,48,"ι","Ari",""],[55.539,63.217,5.1,30,"","",""],[62.512,80.699,5.1,52,"","",""],[72.844,18.84,5.1,82,"","Tau",""],[98.408,-1.22,5.1,200,"","",""],[108.385,-44.64,5.1,28,"","",""],[110.487,20.444,5.1,35,"","Gem",""],[111.591,-51.018,5.1,50,"","",""],[132.64,-46.529,5.1,300,"","",""],[163.394,54.585,5.1,46,"","UMa",""],[184.001,14.899,5.1,92,"","Com",""],[199.221,-31.506,5.1,48,"","",""],[216.047,5.82,5.1,88,"","",""],[272.22,20.045,5.1,80,"","Her",""],[275.578,-38.657,5.1,44,"","",""],[283.68,-15.603,5.1,200,"","",""],[289.635,1.085,5.1,47,"","Aql",""],[301.29,19.991,5.1,47,"η","Sge",""],[310.012,-18.139,5.1,32,"υ","Cap",""],[324.889,2.244,5.1,50,"","Aqr",""],[335.006,-80.44,5.1,28,"ε","Oct",""],[334.111,-41.627,5.1,52,"μ²","Gru",""],[345.651,42.758,5.1,92,"","And",""],[0.456,-3.027,5.1,160,"","Psc",""],[28.592,-42.497,5.11,92,"φ","Phe",""],[44.322,31.934,5.11,120,"","Per",""],[45.903,-59.738,5.11,75,"μ","Hor",""],[57.386,33.091,5.11,92,"","Per",""],[58.412,-34.732,5.11,180,"","",""],[68.548,-8.231,5.11,30,"","Eri",""],[87.473,-66.901,5.11,180,"ε","Dor",""],[109.659,-36.743,5.11,260,"","",""],[119.774,-23.311,5.11,47,"","Pup",""],[141.575,-53.379,5.11,180,"","",""],[143.472,-80.941,5.11,200,"ζ","Cha",""],[170.841,-64.955,5.11,200,"","",""],[177.188,-26.75,5.11,29,"","",""],[224.183,-62.781,5.11,220,"θ","Cir",""],[233.812,39.01,5.11,34,"μ","CrB",""],[237.815,-3.091,5.11,92,"","Ser",""],[258.837,-26.603,5.11,48,"","Oph",""],[292.689,27.965,5.11,140,"β²","Cyg",""],[297.757,10.416,5.11,63,"ο","Aql",""],[308.48,-44.516,5.11,50,"ν","Mic",""],[312.122,-43.989,5.11,74,"ι","Mic",""],[325.046,43.274,5.11,34,"","Cyg",""],[331.287,62.28,5.11,330,"","Cep",""],[345.874,-34.749,5.11,75,"π","PsA",""],[358.027,-82.019,5.11,53,"γ¹","Oct",""],[3.615,-7.781,5.12,30,"","",""],[5.443,-20.058,5.12,28,"","",""],[22.4,-21.629,5.12,98,"","Cet",""],[65.966,9.461,5.12,92,"","Tau",""],[76.69,-4.655,5.12,120,"","Eri",""],[77.182,-4.456,5.12,72,"","Eri",""],[103.426,68.888,5.12,160,"","Cam",""],[121.269,13.118,5.12,98,"","Cnc",""],[139.096,-44.266,5.12,46,"","",""],[143.435,-49.005,5.12,220,"","",""],[160.486,65.716,5.12,47,"","UMa",""],[191.661,16.578,5.12,46,"","Com",""],[215.845,8.447,5.12,100,"","",""],[221.247,27.075,5.12,95,"ε","Boo",""],[239.223,-33.966,5.12,92,"ξ¹","Lup",""],[240.31,17.818,5.12,52,"","Her",""],[260.226,24.499,5.12,95,"","Her",""],[261.054,-44.163,5.12,160,"","",""],[267.205,25.623,5.12,47,"","Her",""],[275.254,28.87,5.12,82,"","Her",""],[276.057,39.507,5.12,92,"μ","Lyr","Alathfar"],[287.919,56.859,5.12,52,"","Dra",""],[293.78,-10.56,5.12,51,"","Aql",""],[297.642,38.723,5.12,32,"","Cyg",""],[310.011,-60.549,5.12,63,"φ²","Pav",""],[347.381,8.677,5.12,29,"","Peg",""],[9.194,44.489,5.13,42,"","",""],[18.6,-7.923,5.13,68,"","Cet",""],[83.819,-5.39,5.13,420,"θ¹","Ori",""],[105.908,10.952,5.13,46,"","",""],[110.511,36.761,5.13,50,"","Aur",""],[114.32,-4.111,5.13,66,"","Mon",""],[123.401,-46.992,5.13,260,"","",""],[126.478,7.564,5.13,53,"","",""],[138.586,61.423,5.13,62,"","UMa",""],[167.142,-61.947,5.13,120,"","",""],[172.942,-59.442,5.13,57,"ο¹","Cen",""],[188.94,-41.022,5.13,82,"","",""],[228.66,67.347,5.13,62,"","",""],[242.758,-29.416,5.13,46,"","",""],[251.667,-67.11,5.13,88,"","",""],[280.945,-38.324,5.13,95,"λ","CrA",""],[287.291,76.561,5.13,78,"","Dra",""],[300.436,-59.376,5.13,26,"","",""],[335.398,-21.598,5.13,47,"","Aqr",""],[359.732,-52.746,5.13,50,"π","Phe",""],[30.427,-44.714,5.14,42,"χ","Phe",""],[37.007,-33.811,5.14,95,"φ","For",""],[52.602,11.336,5.14,100,"","Tau",""],[81.58,-58.913,5.14,54,"λ","Dor",""],[90.864,19.691,5.14,140,"","Ori",""],[94.424,-16.816,5.14,46,"","",""],[102.738,67.572,5.14,220,"","Cam",""],[102.477,-46.615,5.14,68,"","",""],[105.215,-51.402,5.14,34,"","",""],[107.698,-48.932,5.14,47,"","",""],[116.876,33.416,5.14,34,"π","Gem",""],[117.925,1.767,5.14,140,"ζ","CMi",""],[125.016,27.218,5.14,66,"χ","Cnc",""],[137.098,66.873,5.14,42,"σ¹","UMa",""],[137.34,22.046,5.14,51,"ξ","Cnc",""],[149.421,41.056,5.14,66,"","LMi",""],[183.05,77.616,5.14,88,"","",""],[185.232,-13.566,5.14,48,"","",""],[214.885,-2.266,5.14,51,"υ","Vir",""],[243.814,-47.372,5.14,140,"θ","Nor",""],[277.86,-18.403,5.14,100,"","",""],[278.76,-10.977,5.14,52,"","",""],[281.095,39.613,5.14,80,"ε²","Lyr",""],[284.652,-60.201,5.14,47,"ω","Pav",""],[298.322,57.524,5.14,200,"","Cyg",""],[311.661,16.124,5.14,64,"γ¹","Del",""],[331.508,45.014,5.14,42,"","",""],[38.026,36.147,5.15,42,"","Tri",""],[49.657,50.222,5.15,240,"","Per",""],[97.846,-12.392,5.15,46,"","",""],[132.987,43.727,5.15,50,"","Lyn",""],[166.819,-42.639,5.15,88,"","",""],[172.953,-59.516,5.15,95,"ο²","Cen",""],[174.252,-61.283,5.15,50,"","",""],[174.53,-61.826,5.15,88,"","",""],[180.915,-42.434,5.15,66,"","",""],[185.53,-67.522,5.15,88,"ζ²","Mus",""],[199.56,49.682,5.15,100,"","CVn",""],[206.735,-36.252,5.15,100,"","",""],[208.675,-1.503,5.15,47,"","Vir",""],[209.63,-24.972,5.15,140,"","Hya",""],[222.672,-15.997,5.15,69,"α¹","Lib",""],[226.33,-41.067,5.15,52,"","",""],[233.655,-28.047,5.15,44,"","Lib",""],[251.458,8.582,5.15,42,"","Her",""],[266.036,-51.834,5.15,57,"μ","Ara","Cervantes"],[288.428,2.294,5.15,140,"","Aql",""],[291.538,36.318,5.15,120,"","Cyg",""],[303.876,23.509,5.15,57,"","Vul",""],[310.488,-66.761,5.15,120,"υ","Pav",""],[316.179,-77.024,5.15,82,"α","Oct",""],[17.778,31.425,5.16,75,"","Psc",""],[19.45,3.614,5.16,92,"","Psc",""],[39.508,72.818,5.16,52,"","",""],[123.816,-62.916,5.16,95,"","",""],[130.918,-49.823,5.16,300,"","",""],[134.85,-59.084,5.16,70,"","",""],[153.377,-66.373,5.16,88,"","",""],[158.79,57.083,5.16,74,"","UMa",""],[194.268,-51.199,5.16,140,"","",""],[229.017,-41.491,5.16,55,"","",""],[268.325,40.008,5.16,48,"","Her",""],[269.772,-30.253,5.16,34,"","",""],[278.089,-39.704,5.16,92,"","",""],[286.583,-52.341,5.16,64,"ρ","Tel",""],[291.243,11.944,5.16,52,"","Aql",""],[291.369,19.799,5.16,50,"","Vul",""],[309.854,0.486,5.16,48,"","Aqr",""],[316.309,-54.727,5.16,47,"μ","Ind",""],[320.723,6.811,5.16,92,"β","Equ",""],[343.1,9.836,5.16,64,"σ","Peg",""],[347.934,8.72,5.16,88,"","Peg",""],[7.057,44.394,5.17,95,"","",""],[17.068,54.92,5.17,55,"μ","Cas","Marfak"],[35.589,55.846,5.17,95,"","Per",""],[44.156,-3.712,5.17,98,"","",""],[65.92,-3.746,5.17,95,"ξ","Eri",""],[86.5,-32.306,5.17,330,"μ","Col",""],[87.722,-52.109,5.17,52,"","",""],[104.96,-67.916,5.17,46,"","",""],[106.076,-56.75,5.17,100,"","",""],[115.925,-40.934,5.17,48,"","",""],[117.943,-13.898,5.17,60,"","Pup",""],[119.466,-45.578,5.17,47,"","",""],[119.907,-60.587,5.17,34,"","",""],[126.379,-51.728,5.17,260,"","",""],[145.738,72.252,5.17,50,"","UMa",""],[171.43,-63.973,5.17,64,"","",""],[174.873,-65.398,5.17,58,"","",""],[193.653,-57.168,5.17,200,"μ²","Cru",""],[226.201,-64.032,5.17,52,"η","Cir",""],[231.447,15.428,5.17,34,"τ¹","Ser",""],[232.159,1.842,5.17,80,"","Ser",""],[233.611,-9.183,5.17,180,"","",""],[283.165,-52.108,5.17,52,"κ","Tel",""],[294.158,44.695,5.17,51,"","",""],[294.798,5.398,5.17,240,"σ","Aql",""],[304.663,34.983,5.17,68,"","Cyg",""],[313.903,13.721,5.17,50,"","Del",""],[325.767,72.32,5.17,50,"","",""],[5.28,37.969,5.18,68,"ρ","And",""],[5.38,-28.982,5.18,55,"ι","Scl",""],[25.733,70.622,5.18,120,"","Cas",""],[41.24,12.446,5.18,82,"","Ari",""],[77.923,16.046,5.18,42,"","",""],[84.934,25.897,5.18,240,"","Tau",""],[105.603,24.215,5.18,55,"ω","Gem",""],[116.664,37.517,5.18,32,"","",""],[117.422,-17.228,5.18,46,"","Pup",""],[134.718,-47.235,5.18,88,"","",""],[160.887,46.204,5.18,68,"","",""],[169.323,2.011,5.18,35,"","Leo",""],[179.004,-17.151,5.18,100,"η","Crt",""],[181.957,-75.367,5.18,47,"","",""],[186.077,26.099,5.18,92,"","Com",""],[270.375,21.595,5.18,52,"","Her",""],[290.712,26.262,5.18,180,"","Vul",""],[303.56,28.695,5.18,82,"","Vul",""],[316.603,-32.342,5.18,47,"","",""],[319.842,64.872,5.18,240,"","Cep",""],[325.387,-14.047,5.18,59,"","Cap",""],[356.817,-50.227,5.18,240,"σ","Phe",""],[357.839,-18.909,5.18,120,"","Aqr",""],[7.595,-23.788,5.19,88,"","",""],[12.532,-10.644,5.19,64,"φ²","Cet",""],[36.104,50.007,5.19,52,"","And",""],[64.18,53.612,5.19,95,"","",""],[73.695,11.426,5.19,92,"","Ori",""],[82.97,-76.341,5.19,47,"γ","Men",""],[100.485,-9.167,5.19,35,"","",""],[111.035,40.672,5.19,48,"","Aur",""],[129.99,-53.055,5.19,220,"","",""],[196.974,-10.74,5.19,47,"","Vir",""],[236.667,62.599,5.19,95,"","",""],[299.98,37.043,5.19,240,"","Cyg",""],[339.663,63.584,5.19,92,"","Cep",""],[8.812,-3.593,5.2,63,"","Cet",""],[35.636,-23.816,5.2,60,"κ","For",""],[61.652,27.6,5.2,120,"","Tau",""],[76.892,-63.4,5.2,30,"","",""],[88.741,59.888,5.2,95,"","Cam",""],[93.712,19.156,5.2,66,"","Ori",""],[96.808,0.299,5.2,48,"","",""],[99.705,39.902,5.2,140,"ψ³","Aur",""],[101.118,-31.071,5.2,260,"","CMa",""],[105.485,-5.722,5.2,32,"","",""],[106.012,-42.337,5.2,88,"","",""],[108.979,59.638,5.2,47,"","Lyn",""],[125.337,-36.484,5.2,260,"","",""],[130.08,-40.264,5.2,120,"","",""],[129.772,-70.387,5.2,100,"θ","Vol",""],[134.312,15.323,5.2,88,"ο¹","Cnc",""],[134.886,32.419,5.2,52,"σ³","Cnc",""],[146.632,57.128,5.2,30,"","",""],[174.012,69.323,5.2,50,"","Dra",""],[223.894,-60.114,5.2,47,"","",""],[226.657,-16.257,5.2,42,"ν","Lib",""],[237.674,15.134,5.2,24,"","",""],[245.589,33.799,5.2,32,"ν¹","CrB",""],[247.706,-61.634,5.2,50,"","",""],[259.503,-24.287,5.2,50,"ο","Oph",""],[281.871,-5.705,5.2,50,"","",""],[307.877,74.955,5.2,100,"","Dra",""],[338.673,-20.708,5.2,69,"υ","Aqr",""],[350.663,-15.039,5.2,92,"","Aqr",""],[16.95,-41.487,5.21,92,"υ","Phe",""],[40.165,-54.55,5.21,69,"ζ","Hor",""],[91.056,-6.709,5.21,260,"","",""],[96.704,58.417,5.21,44,"","Lyn",""],[100.601,17.645,5.21,95,"","Gem",""],[122.4,-44.123,5.21,260,"","",""],[132.465,-32.781,5.21,55,"","",""],[157.37,-2.739,5.21,120,"δ","Sex",""],[180.528,43.046,5.21,75,"","UMa",""],[185.14,-22.216,5.21,140,"ζ","Crv",""],[203.242,-10.165,5.21,50,"","Vir",""],[221.755,-52.384,5.21,52,"","",""],[276.802,0.196,5.21,60,"","Ser",""],[316.728,38.746,5.21,42,"","Cyg",""],[339.658,56.796,5.21,29,"","",""],[12.672,-50.987,5.22,72,"ρ","Phe",""],[31.38,76.115,5.22,52,"","Cas",""],[42.323,17.464,5.22,180,"π","Ari",""],[63.651,10.011,5.22,120,"","",""],[89.707,0.553,5.22,98,"","Ori",""],[96.043,-11.53,5.22,46,"","",""],[97.369,-56.853,5.22,50,"","",""],[101.915,48.789,5.22,50,"ψ⁶","Aur",""],[111.935,21.445,5.22,68,"","Gem",""],[133.915,27.928,5.22,52,"ρ²","Cnc",""],[171.372,-36.063,5.22,50,"","",""],[175.433,-32.5,5.22,42,"","",""],[191.405,7.673,5.22,75,"","Vir",""],[197.497,17.529,5.22,68,"α","Com","Diadem"],[197.497,17.529,5.22,68,"α","Com",""],[198.995,-19.943,5.22,48,"","Vir",""],[199.194,9.424,5.22,60,"","Vir",""],[243.462,-11.838,5.22,46,"χ","Sco",""],[252.89,-41.231,5.22,360,"","",""],[284.257,32.901,5.22,62,"","",""],[287.25,6.073,5.22,75,"","Aql",""],[300.506,24.938,5.22,72,"","Vul",""],[309.818,-14.955,5.22,180,"τ","Cap",""],[352.822,39.236,5.22,50,"","And","Veritate"],[7.53,29.752,5.23,82,"","And",""],[20.281,28.738,5.23,42,"","Psc",""],[30.512,2.764,5.23,92,"α","Psc",""],[44.675,-2.782,5.23,95,"","",""],[51.169,64.586,5.23,35,"","",""],[54.073,-17.467,5.23,120,"","Eri",""],[61.752,29.001,5.23,74,"ψ","Tau",""],[69.4,-2.473,5.23,75,"","Eri",""],[80.452,41.804,5.23,240,"ρ","Aur",""],[97.951,11.544,5.23,92,"","",""],[116.881,-46.609,5.23,280,"","",""],[122.43,-47.938,5.23,280,"","",""],[130.487,-45.411,5.23,180,"","",""],[135.436,-52.188,5.23,120,"","",""],[149.718,-35.891,5.23,74,"η","Ant",""],[161.624,-64.263,5.23,160,"","",""],[161.74,-56.757,5.23,140,"","",""],[168.188,-64.17,5.23,140,"","",""],[214.965,-61.273,5.23,88,"","",""],[237.573,2.196,5.23,52,"ω","Ser",""],[246.931,-7.598,5.23,30,"","",""],[261.5,-50.634,5.23,52,"κ","Ara",""],[263.748,61.875,5.23,60,"","Dra",""],[284.774,13.623,5.23,63,"","Aql",""],[286.857,32.502,5.23,75,"","Lyr",""],[314.768,4.294,5.23,66,"ε","Equ",""],[11.185,-22.006,5.24,74,"","",""],[18.433,7.575,5.24,82,"ζ","Psc",""],[25.624,20.269,5.24,48,"","Psc",""],[49.554,-62.506,5.24,59,"ζ²","Ret",""],[56.915,-23.875,5.24,95,"τ⁷","Eri",""],[65.472,-63.386,5.24,52,"η","Ret",""],[98.089,-37.697,5.24,52,"","",""],[119.868,-39.297,5.24,68,"","",""],[136.937,10.668,5.24,140,"κ","Cnc",""],[139.174,-6.353,5.24,47,"","Hya",""],[154.407,-8.069,5.24,72,"ε","Sex",""],[161.466,30.682,5.24,98,"","LMi",""],[163.373,-20.139,5.24,66,"","",""],[193.869,65.439,5.24,75,"","Dra",""],[213.017,69.433,5.24,32,"","",""],[221.937,-26.087,5.24,55,"","Hya",""],[232.351,-46.733,5.24,44,"","",""],[234.457,40.353,5.24,53,"φ","Boo",""],[235.66,-37.425,5.24,52,"","",""],[251.943,5.247,5.24,120,"","Her",""],[270.77,-8.181,5.24,72,"τ","Oph",""],[281.936,-40.406,5.24,55,"μ","CrA",""],[282.417,-20.325,5.24,44,"","Sgr",""],[304.23,40.365,5.24,46,"","",""],[318.908,-20.652,5.24,51,"φ","Cap",""],[322.363,46.541,5.24,50,"","Cyg",""],[325.503,-23.263,5.24,51,"","Cap",""],[332.953,56.839,5.24,63,"","",""],[345.887,67.209,5.24,46,"","",""],[356.05,-18.277,5.24,120,"","Aqr",""],[2.933,-35.133,5.25,69,"θ","Scl",""],[3.042,-17.938,5.25,42,"","",""],[25.536,-32.327,5.25,50,"π","Scl",""],[37.875,2.267,5.25,46,"","",""],[56.127,-1.163,5.25,160,"","Eri",""],[80.876,-13.927,5.25,260,"","Lep",""],[101.685,43.578,5.25,60,"ψ⁵","Aur",""],[109.64,-39.21,5.25,98,"","",""],[112.009,6.942,5.25,75,"η","CMi",""],[113.025,1.914,5.25,75,"δ¹","CMi",""],[113.402,15.827,5.25,98,"","Gem",""],[138.602,-43.227,5.25,220,"","",""],[144.59,40.24,5.25,75,"","Lyn",""],[163.129,-57.241,5.25,120,"","",""],[173.982,-47.642,5.25,82,"","",""],[196.435,35.799,5.25,120,"","CVn",""],[197.847,-43.369,5.25,48,"","",""],[201.68,-12.708,5.25,35,"","Vir",""],[208.02,-52.812,5.25,120,"","",""],[212.072,49.458,5.25,34,"","Boo",""],[226.57,54.556,5.25,53,"","",""],[245.453,69.109,5.25,47,"","",""],[247.64,20.479,5.25,52,"","",""],[253.649,-6.154,5.25,47,"","Oph",""],[255.402,33.568,5.25,92,"","Her",""],[260.817,-47.468,5.25,260,"ι","Ara",""],[264.523,-54.5,5.25,88,"π","Ara",""],[276.076,-44.11,5.25,260,"","",""],[275.704,17.827,5.25,46,"","",""],[282.47,32.551,5.25,92,"ν²","Lyr",""],[306.83,-18.212,5.25,140,"π","Cap","Okul"],[340.369,40.226,5.25,260,"","Lac",""],[29.908,64.621,5.26,100,"","",""],[42.256,-62.807,5.26,95,"ν","Hor",""],[46.068,-7.601,5.26,80,"ρ³","Eri",""],[57.579,25.579,5.26,95,"","",""],[65.151,15.095,5.26,75,"","Tau",""],[68.549,-8.97,5.26,44,"","",""],[83.915,-4.856,5.26,75,"","Ori",""],[101.839,-37.93,5.26,120,"","",""],[128.814,-58.225,5.26,240,"","",""],[139.524,-51.051,5.26,160,"","",""],[149.556,12.445,5.26,120,"ν","Leo",""],[157.769,82.559,5.26,72,"","",""],[175.196,21.353,5.26,48,"","Leo",""],[180.213,-19.659,5.26,280,"","",""],[228.622,29.164,5.26,95,"χ","Boo",""],[234.123,10.01,5.26,50,"","Ser",""],[299.276,-58.901,5.26,120,"","",""],[318.263,-39.425,5.26,68,"","",""],[341.888,-19.613,5.26,53,"","Aqr",""],[22.526,47.007,5.27,50,"","And",""],[33.2,21.211,5.27,68,"η","Ari",""],[46.64,-6.089,5.27,30,"","",""],[65.168,65.141,5.27,55,"","",""],[71.088,-59.733,5.27,80,"κ","Dor",""],[87.001,6.454,5.27,88,"","Ori",""],[94.928,-7.823,5.27,260,"","Mon",""],[97.455,-50.239,5.27,72,"","",""],[98.8,28.022,5.27,100,"","Aur",""],[99.448,-32.34,5.27,47,"","",""],[102.887,21.761,5.27,95,"","Gem",""],[116.017,50.434,5.27,100,"","",""],[129.468,-26.255,5.27,100,"η","Pyx",""],[138.958,56.741,5.27,42,"","UMa",""],[138.575,-55.57,5.27,52,"","",""],[148.929,49.82,5.27,92,"","UMa",""],[176.732,55.628,5.27,47,"","",""],[211.982,43.854,5.27,29,"","",""],[245.112,-78.667,5.27,46,"δ²","Aps",""],[246.989,-64.058,5.27,69,"ι","TrA",""],[274.795,24.446,5.27,46,"","Her",""],[281.445,74.086,5.27,50,"","",""],[284.94,26.231,5.27,47,"","",""],[295.642,11.827,5.27,60,"χ","Aql",""],[300.369,64.821,5.27,34,"","Dra",""],[331.252,62.786,5.27,44,"","Cep",""],[333.294,86.108,5.27,120,"","",""],[2.509,-82.224,5.28,52,"γ³","Oct",""],[24.629,73.04,5.28,52,"","Cas",""],[33.227,-30.724,5.28,120,"μ","For",""],[33.984,33.359,5.28,100,"","Tri",""],[35.486,0.396,5.28,32,"","Cet",""],[37.919,-79.109,5.28,52,"μ","Hyi",""],[45.218,52.352,5.28,160,"","",""],[50.307,21.147,5.28,200,"τ¹","Ari",""],[59.152,50.695,5.28,68,"","Per",""],[60.383,-1.55,5.28,200,"","Eri",""],[66.354,22.2,5.28,82,"κ²","Tau",""],[66.526,31.439,5.28,48,"","",""],[80.866,57.544,5.28,100,"","Cam",""],[109.713,-26.586,5.28,58,"","",""],[126.265,-24.046,5.28,42,"","",""],[152.178,-65.815,5.28,50,"","",""],[153.345,-51.233,5.28,82,"","",""],[192.307,83.413,5.28,98,"","",""],[283.695,-87.606,5.28,46,"χ","Oct",""],[270.596,20.834,5.28,240,"","Her",""],[278.491,-33.017,5.28,260,"","",""],[286.825,36.1,5.28,180,"ι","Lyr",""],[289.454,11.595,5.28,75,"ω¹","Aql",""],[299.06,11.424,5.28,98,"φ","Aql",""],[304.848,-19.119,5.28,46,"σ","Cap",""],[318.937,-15.171,5.28,30,"","Cap",""],[355.616,-15.448,5.28,44,"","",""],[17.664,68.779,5.29,100,"","Cas",""],[37.042,29.669,5.29,75,"","Tri",""],[50.805,49.213,5.29,200,"","",""],[63.388,7.716,5.29,72,"","Tau",""],[70.726,43.365,5.29,98,"","Per",""],[85.563,-34.668,5.29,120,"","",""],[86.929,13.9,5.29,260,"","Tau",""],[88.709,-52.635,5.29,75,"","",""],[99.137,38.445,5.29,40,"","",""],[101.713,-14.426,5.29,120,"","CMa",""],[119.586,2.225,5.29,50,"","CMi",""],[125.518,-73.4,5.29,100,"η","Vol",""],[131.812,-1.897,5.29,92,"","",""],[139.356,-74.894,5.29,98,"","",""],[157.219,-64.172,5.29,35,"","",""],[176.433,-45.69,5.29,180,"","",""],[184.953,48.984,5.29,35,"","CVn",""],[187.228,25.913,5.29,98,"","Com",""],[213.712,10.101,5.29,48,"","Boo",""],[249.502,56.016,5.29,48,"","",""],[255.787,-53.237,5.29,66,"ε²","Ara",""],[261.715,-45.844,5.29,160,"","",""],[323.025,-41.179,5.29,50,"ξ","Gru",""],[327.726,-82.719,5.29,52,"λ","Oct",""],[326.518,22.949,5.29,50,"","Peg",""],[327.536,17.286,5.29,72,"","Peg",""],[330.97,63.12,5.29,28,"","Cep",""],[336.153,-72.256,5.29,92,"ν","Ind",""],[356.504,-18.678,5.29,72,"","Aqr",""],[34.82,47.38,5.3,98,"","And",""],[39.26,34.264,5.3,29,"","",""],[40.171,27.061,5.3,92,"","Ari",""],[72.001,56.757,5.3,92,"","Cam",""],[76.952,20.418,5.3,88,"","Tau",""],[79.996,-12.316,5.3,160,"ν","Lep",""],[93.855,16.143,5.3,160,"","Ori",""],[103.945,-22.941,5.3,240,"","",""],[111.243,11.67,5.3,88,"","CMi",""],[116.567,10.768,5.3,98,"","CMi",""],[121.941,21.582,5.3,59,"μ²","Cnc",""],[171.647,-61.115,5.3,240,"","",""],[175.618,66.745,5.3,46,"","Dra",""],[178.677,-25.714,5.3,56,"","",""],[223.584,-24.642,5.3,47,"","Lib",""],[299.964,-34.698,5.3,90,"θ²","Sgr",""],[315.742,-38.632,5.3,70,"ζ","Mic",""],[317.14,-21.194,5.3,100,"χ","Cap",""],[325.565,5.68,5.3,32,"","Peg",""],[331.197,-0.907,5.3,88,"","Aqr",""],[354.785,50.472,5.3,120,"","And",""],[358.155,10.947,5.3,90,"","Peg",""]];
+const CONSTS=[{"c":"Cru","n":"Cruz del Sur","h":1,"l":[[19,23],[17,132]]},{"c":"Cen","n":"Centauro","h":1,"l":[[3,10,76,94,183,262,57],[94,78,199],[76,63,99],[262,122]]},{"c":"Sco","n":"Escorpión","h":1,"l":[[522,104,79,152,460],[79,153,13,136,75,188,333,240,39,181,83,24,115]]},{"c":"Ori","n":"Orión","h":1,"l":[[9,299,25],[9,53,28,67,25],[53,56],[67,6],[25,209],[1057,762,209,356,366,867],[9,589,873],[589,819]]},{"c":"CMa","n":"Can Mayor","h":1,"l":[[45,0,179,35,88],[35,22,178],[0,780,590]]},{"c":"Car","n":"Carina","h":1,"l":[[1,278,37,71,175,124,237,27,175]]},{"c":"Vel","n":"Vela","h":0,"l":[[32,44,92,300,113,65,32],[65,326]]},{"c":"Pup","n":"Popa","h":0,"l":[[241,133,70,116,205,159],[116,223]]},{"c":"Mus","n":"Mosca","h":0,"l":[[582,114,185,332,451,114]]},{"c":"TrA","n":"Triángulo Austral","h":0,"l":[[41,141,151,41]]},{"c":"Lup","n":"Lobo","h":0,"l":[[263,77,111,216,128,252,77]]},{"c":"Ara","n":"Altar","h":0,"l":[[347,163,142,200,387],[142,243,334]]},{"c":"CrA","n":"Corona Austral","h":0,"l":[[1392,1482,584,585,994,1192]]},{"c":"Sgr","n":"Sagitario","h":0,"l":[[168,36,100,239,51,208,135,118,168],[118,36],[208,100],[118,208],[135,444],[51,392,154]]},{"c":"Gru","n":"Grulla","h":0,"l":[[177,860,506,60,284,593],[30,60]]},{"c":"Pav","n":"Pavo","h":0,"l":[[43,266,310],[266,641]]},{"c":"Tuc","n":"Tucán","h":0,"l":[[881,144,512,903,643,776]]},{"c":"Hyi","n":"Hidra Macho","h":0,"l":[[143,131,220,143]]},{"c":"Phe","n":"Fénix","h":0,"l":[[455,81,234,260],[234,476]]},{"c":"Eri","n":"Erídano","h":0,"l":[[129,479,161,298,372,461],[461,863,573,355,678,646,412,219,306,359,8]]},{"c":"Col","n":"Paloma","h":0,"l":[[449,106,195,764,434],[195,494]]},{"c":"Lep","n":"Liebre","h":0,"l":[[235,97,139,210],[97,303,362],[139,323,410,97]]},{"c":"CMi","n":"Can Menor","h":0,"l":[[7,155]]},{"c":"Gem","n":"Géminis","h":0,"l":[[46,808,165,148,231],[15,294,399,42],[46,15]]},{"c":"Tau","n":"Tauro","h":0,"l":[[171,12,257,341,385,293,26],[341,276]]},{"c":"Aur","n":"Auriga","h":0,"l":[[5,40,103,26,112,5]]},{"c":"Per","n":"Perseo","h":0,"l":[[158,33,174,150,140],[33,61]]},{"c":"Ari","n":"Aries","h":0,"l":[[48,105,1182]]},{"c":"Leo","n":"Leo","h":0,"l":[[166,457,270,101,291,21,242,62,95,101],[95,242]]},{"c":"Hya","n":"Hidra","h":0,"l":[[840,613,254,191,456,472,47,591,328,411,192,301,694,173,228]]},{"c":"Crv","n":"Cuervo","h":0,"l":[[530,172,98,162,107,172]]},{"c":"Vir","n":"Virgo","h":0,"l":[[329,463,342,255,138],[342,14],[255,251,14]]},{"c":"Lib","n":"Libra","h":0,"l":[[232,123,102,475,123]]},{"c":"Oph","n":"Ofiuco","h":0,"l":[[59,212,120,221,96,85,127,59]]},{"c":"Aql","n":"Águila","h":0,"l":[[119,11,365],[11,250,217],[250,271],[250,169]]},{"c":"Lyr","n":"Lira","h":0,"l":[[4,1744,771,4],[771,274,222,716,771]]},{"c":"Cyg","n":"Cisne","h":0,"l":[[18,64,466,189],[89,64,146]]},{"c":"Peg","n":"Pegaso","h":0,"l":[[91,84,54,137,91],[91,259,297,82],[84,160]]},{"c":"And","n":"Andrómeda","h":0,"l":[[54,225,55,72]]},{"c":"Cas","n":"Casiopea","h":0,"l":[[253,109,90,66,73]]},{"c":"UMa","n":"Osa Mayor","h":0,"l":[[38,74,31,236,34,80,86,236]]},{"c":"Boo","n":"Boyero","h":0,"l":[[2,117,279,286,180,317,2],[2,110],[2,829]]},{"c":"CrB","n":"Corona Boreal","h":0,"l":[[602,353,68,429,1038,609]]},{"c":"Her","n":"Hércules","h":0,"l":[[477,134,296,203,477],[134,126],[203,923]]},{"c":"Cap","n":"Capricornio","h":0,"l":[[315,190,603,586,376,147,354,564,190]]},{"c":"Aqr","n":"Acuario","h":0,"l":[[395,157,164,431,825,535],[164,615,377,230]]},{"c":"PsA","n":"Pez Austral","h":0,"l":[[16,618],[16,633,862,711]]},{"c":"Cet","n":"Ballena","h":0,"l":[[305,52,272,320,371,285,52],[371,182,557,275,93]]},{"c":"Dor","n":"Dorado","h":0,"l":[[661,226,386,750]]}];
+/*DATA-END*/
+</script>
+
+<script>
+'use strict';
+/* =================== Textos en español =================== */
+// Estrellas destacadas: [nombre, distancia en años luz, curiosidad]
+const STAR_INFO = {
+  'α CMa': ['Sirio', 8.6, 'La estrella más brillante del cielo nocturno. Tiene una compañera enana blanca, Sirio B, del tamaño de la Tierra.'],
+  'α Car': ['Canopus', 310, 'La segunda estrella más brillante. Las sondas espaciales la usan como referencia para orientarse.'],
+  'α Cen': ['Alfa Centauri', 4.37, 'El sistema estelar más cercano al Sol. A simple vista parece una sola estrella, pero son dos soles; a su lado está Próxima Centauri.'],
+  'α Boo': ['Arturo', 36.7, 'Una gigante naranja 25 veces más grande que el Sol. Es la estrella más brillante del hemisferio norte celeste.'],
+  'α Lyr': ['Vega', 25, 'Hace 12.000 años fue la estrella polar del norte y volverá a serlo dentro de unos 13.000 años.'],
+  'α Aur': ['Capella', 42.9, 'En realidad son cuatro estrellas: dos gigantes amarillas y dos enanas rojas.'],
+  'β Ori': ['Rigel', 860, 'Una supergigante azul unas 120.000 veces más luminosa que el Sol. Marca el pie de Orión.'],
+  'α CMi': ['Proción', 11.5, 'Su nombre significa “antes del perro”: sale justo antes que Sirio, la estrella del Can Mayor.'],
+  'α Eri': ['Achernar', 139, 'Gira tan rápido que está achatada: su diámetro en el ecuador es un 35 % mayor que entre sus polos.'],
+  'α Ori': ['Betelgeuse', 550, 'Una supergigante roja: si estuviera en el lugar del Sol, llegaría más allá de la órbita de Marte. Algún día explotará como supernova.'],
+  'β Cen': ['Hadar', 390, 'Junto a Alfa Centauri forma “los punteros”, que señalan hacia la Cruz del Sur.'],
+  'α Aql': ['Altair', 16.7, 'Gira sobre sí misma en solo 9 horas, tan rápido que tiene forma de huevo aplastado.'],
+  'α Cru': ['Acrux', 320, 'La estrella más brillante de la Cruz del Sur y el pie de la cruz. Aparece en la bandera de Brasil.'],
+  'α Tau': ['Aldebarán', 65, 'El “ojo del toro”. Una gigante naranja que parece estar en el cúmulo de las Híades, aunque está mucho más cerca.'],
+  'α Sco': ['Antares', 550, 'Su nombre significa “rival de Marte” por su color rojo. Es el corazón del Escorpión, unas 700 veces más grande que el Sol.'],
+  'α Vir': ['Espiga (Spica)', 250, 'Dos estrellas azules tan cercanas entre sí que se deforman mutuamente y giran una alrededor de la otra en 4 días.'],
+  'β Gem': ['Pólux', 34, 'Una gigante naranja con un planeta gigante confirmado orbitándola.'],
+  'α PsA': ['Fomalhaut', 25, 'La rodea un enorme disco de polvo, como un cinturón de cometas gigante.'],
+  'α Cyg': ['Deneb', 2600, 'Una de las estrellas más luminosas que se ven a simple vista: brilla como ~200.000 soles.'],
+  'β Cru': ['Mimosa', 280, 'El brazo izquierdo de la Cruz del Sur. Es una estrella azul unas 16 veces más masiva que el Sol.'],
+  'α Leo': ['Régulo', 79, 'El corazón del León. Gira tan rápido que, si fuera un poco más veloz, se desarmaría.'],
+  'ε CMa': ['Adhara', 430, 'Hace 4,7 millones de años fue la estrella más brillante del cielo, cuando pasó a solo 34 años luz.'],
+  'α Gem': ['Cástor', 51, 'Parece una estrella, pero es un sistema de seis estrellas unidas por la gravedad.'],
+  'γ Cru': ['Gacrux', 88, 'La cabeza de la Cruz del Sur. Es una gigante roja, por eso se ve algo anaranjada.'],
+  'λ Sco': ['Shaula', 570, 'El aguijón del Escorpión. Su nombre viene del árabe y significa “la cola levantada”.'],
+  'γ Ori': ['Bellatrix', 250, 'Su nombre significa “la guerrera”. Es el hombro derecho de Orión.'],
+  'β Tau': ['Elnath', 134, 'La punta del cuerno del toro; la comparte con la constelación de Auriga.'],
+  'β Car': ['Miaplacidus', 113, 'Una de las estrellas brillantes más cercanas al polo sur celeste: desde Chile nunca se pone.'],
+  'ε Ori': ['Alnilam', 2000, 'La estrella del centro del cinturón de Orión (las Tres Marías). Brilla como 400.000 soles.'],
+  'ζ Ori': ['Alnitak', 1260, 'Una de las Tres Marías. Muy cerca está la famosa Nebulosa Cabeza de Caballo.'],
+  'δ Ori': ['Mintaka', 1200, 'Una de las Tres Marías. Está casi exactamente sobre el ecuador celeste: sale justo por el Este.'],
+  'κ Ori': ['Saiph', 650, 'La rodilla de Orión, una supergigante azul.'],
+  'α Gru': ['Alnair', 101, 'La estrella más brillante de la Grulla. Su nombre significa “la brillante”.'],
+  'δ CMa': ['Wezen', 1600, 'Una supergigante amarilla tan grande que cabrían 200 soles a lo ancho.'],
+  'θ Sco': ['Sargas', 300, 'Parte de la cola del Escorpión, una gigante amarilla muy luminosa.'],
+  'ε Sgr': ['Kaus Australis', 143, 'La estrella más brillante de Sagitario; forma la base de la “tetera”.'],
+  'ε Car': ['Avior', 630, 'Forma, junto con estrellas de Vela, la “Falsa Cruz”, que a veces se confunde con la Cruz del Sur.'],
+  'α TrA': ['Atria', 391, 'La estrella más brillante del Triángulo Austral, una gigante naranja.'],
+  'α Pav': ['Peacock', 180, 'Su nombre significa “pavo real”. Es una estrella azul caliente.'],
+  'β CMa': ['Mirzam', 490, 'Su nombre significa “la anunciadora”: sale justo antes que Sirio.'],
+  'α Hya': ['Alfard', 180, 'Su nombre significa “la solitaria”, porque no tiene estrellas brillantes cerca.'],
+  'α UMi': ['Polaris (Estrella Polar)', 433, 'Marca el polo norte celeste. Desde el hemisferio sur no se ve: está bajo el horizonte.'],
+  'α Ari': ['Hamal', 66, 'La estrella más brillante de Aries.'],
+  'σ Sgr': ['Nunki', 228, 'Uno de los nombres de estrellas más antiguos, de origen babilónico.'],
+  'θ Cen': ['Menkent', 59, 'El hombro del Centauro, una gigante naranja.'],
+  'ι Car': ['Aspidiske', 690, 'Forma parte de la “Falsa Cruz”.'],
+  'λ Vel': ['Suhail', 545, 'Una supergigante naranja de la constelación de la Vela.'],
+  'δ Vel': ['Alsephina', 80, 'Parte de la Falsa Cruz. Es un sistema triple de estrellas.'],
+  'κ Vel': ['Markeb', 570, 'Parte de la Falsa Cruz, una estrella azul.'],
+  'γ Vel': ['Regor', 1100, 'Contiene la estrella Wolf-Rayet más brillante del cielo, un tipo de estrella muy rara y caliente.'],
+  'α Phe': ['Ankaa', 85, 'La estrella más brillante del Fénix.'],
+  'α Oph': ['Rasalhague', 49, 'La cabeza del portador de la serpiente (Ofiuco).'],
+  'β Per': ['Algol', 90, 'La “estrella demonio”: cada 2,9 días su brillo baja porque una estrella compañera la eclipsa.'],
+  'ε Sco': ['Larawag', 64, 'Una gigante naranja en el cuerpo del Escorpión.'],
+  'δ Sco': ['Dschubba', 490, 'La frente del Escorpión. En el año 2000 aumentó su brillo de forma inesperada.'],
+  'β Sco': ['Acrab', 400, 'Una de las pinzas del Escorpión; es un sistema de varias estrellas.'],
+  'α And': ['Alpheratz', 97, 'Une las constelaciones de Andrómeda y Pegaso.'],
+  'δ Cru': ['Imai', 345, 'El brazo derecho de la Cruz del Sur, una estrella azul caliente.'],
+  'ε Cru': ['Ginan', 230, 'La “intrusa” de la Cruz del Sur. Su nombre viene de un pueblo aborigen australiano.'],
+  'ζ Pup': ['Naos', 1080, 'Una de las estrellas más calientes que se ven a simple vista: ~40.000 °C en la superficie.'],
+  'β Leo': ['Denébola', 36, 'La cola del León.'],
+  'α Lib': ['Zubenelgenubi', 76, 'Su nombre significa “la pinza del sur”: antes era parte del Escorpión.'],
+  'α CrB': ['Alphecca', 75, 'La perla de la Corona Boreal.'],
+  'γ Crv': ['Gienah', 154, 'La estrella más brillante del Cuervo.'],
+  'α Col': ['Phact', 260, 'La estrella más brillante de la Paloma.'],
+  'α Lep': ['Arneb', 2200, 'Su nombre significa “la liebre”.'],
+  'α Cet': ['Menkar', 250, 'Una gigante roja en la boca de la Ballena.'],
+  'ο Cet': ['Mira', 300, '“La maravillosa”: su brillo cambia muchísimo en 11 meses; a veces desaparece a simple vista.'],
+  'β Cet': ['Diphda', 96, 'La estrella más brillante de la Ballena.'],
+  'α Hyi': ['Alfa Hydri', 72, 'Cerca de Achernar; ayuda a encontrar el polo sur celeste.'],
+  'α Mus': ['Alfa Muscae', 315, 'La estrella más brillante de la Mosca, junto a la Cruz del Sur.'],
+  'α Lup': ['Alfa Lupi', 460, 'La estrella más brillante del Lobo; algún día explotará como supernova.'],
+  'η Tau': ['Alcíone', 440, 'La estrella más brillante de las Pléyades (las Siete Cabrillas).'],
+  'α Per': ['Mirfak', 510, 'La estrella más brillante de Perseo.'],
+  'α UMa': ['Dubhe', 123, 'Una de las estrellas del “Gran Cazo” de la Osa Mayor.'],
+  'ε UMa': ['Alioth', 81, 'La más brillante de la Osa Mayor; desde Chile se ve muy baja en el norte.'],
+  'γ Gem': ['Alhena', 109, 'El pie de uno de los gemelos.'],
+  'ζ Sgr': ['Ascella', 88, 'Parte de la “tetera” de Sagitario.'],
+  'υ Sco': ['Lesath', 580, 'Junto a Shaula forma el aguijón del Escorpión.'],
+  'η Oph': ['Sabik', 88, 'Dos estrellas blancas casi iguales que giran una alrededor de la otra.'],
+};
+const STAR_NAMES_ES = { // nombres propios que en español cambian
+  'Rigil Kentaurus': 'Alfa Centauri', 'Procyon': 'Proción', 'Aldebaran': 'Aldebarán', 'Pollux': 'Pólux', 'Castor': 'Cástor',
+  'Regulus': 'Régulo', 'Spica': 'Espiga', 'Arcturus': 'Arturo', 'Sirius': 'Sirio', 'Alphard': 'Alfard', 'Denebola': 'Denébola',
+};
+const CONST_INFO = {
+  Cru: ['La constelación más pequeña del cielo y el símbolo del sur. Su eje mayor (de Gacrux a Acrux) apunta, prolongado unas 4,5 veces, hacia el polo sur celeste.'],
+  Cen: ['Una de las constelaciones más grandes. Contiene Alfa Centauri, el sistema estelar más cercano, y Omega Centauri, el cúmulo globular más grande de la Vía Láctea.'],
+  Sco: ['Una de las pocas constelaciones que se parece a lo que representa. En el invierno de Chile pasa justo por encima de nuestras cabezas.'],
+  Ori: ['El cazador. Desde el hemisferio sur se ve “de cabeza”: las Tres Marías forman su cinturón y debajo está la Nebulosa de Orión, una cuna de estrellas.'],
+  CMa: ['El perro del cazador Orión. Contiene a Sirio, la estrella más brillante del cielo nocturno.'],
+  Car: ['La quilla del antiguo barco Argo. Contiene a Canopus y la gran Nebulosa de Carina, una de las más brillantes del cielo.'],
+  Vel: ['Las velas del barco Argo. Dos de sus estrellas forman parte de la Falsa Cruz.'],
+  Pup: ['La popa del barco Argo, que antiguamente era una sola constelación enorme.'],
+  Mus: ['Una pequeña mosca justo al sur de la Cruz del Sur.'],
+  TrA: ['Un triángulo brillante cerca de los punteros (Alfa y Beta Centauri).'],
+  Lup: ['Un lobo que, según los antiguos, el Centauro llevaba en su lanza.'],
+  Ara: ['El altar de los dioses. La Vía Láctea sube desde aquí como si fuera humo.'],
+  CrA: ['Una pequeña corona en forma de arco, a los pies de Sagitario.'],
+  Sgr: ['El arquero. Sus estrellas forman una “tetera”; hacia allí está el centro de nuestra galaxia.'],
+  Gru: ['La grulla, un ave de cuello largo, cerca de Fomalhaut.'],
+  Pav: ['El pavo real, una constelación del extremo sur.'],
+  Tuc: ['El tucán. Contiene el cúmulo 47 Tucanae y la Nube Menor de Magallanes.'],
+  Hyi: ['La serpiente de agua macho, entre las Nubes de Magallanes.'],
+  Phe: ['El ave mitológica que renace de sus cenizas.'],
+  Eri: ['Un río celestial larguísimo que nace junto a Orión y termina en Achernar.'],
+  Col: ['La paloma de Noé, al sur de la Liebre.'],
+  Lep: ['La liebre, a los pies de Orión.'],
+  CMi: ['El perro pequeño de Orión; casi solo Proción y Gomeisa.'],
+  Gem: ['Los gemelos Cástor y Pólux. Desde Chile se ven bajos hacia el norte.'],
+  Tau: ['El toro, con su ojo rojo Aldebarán y el cúmulo de las Pléyades.'],
+  Aur: ['El cochero. Desde Chile se ve muy bajo en el norte.'],
+  Per: ['El héroe Perseo, con la estrella variable Algol.'],
+  Ari: ['El carnero del vellocino de oro.'],
+  Leo: ['El león. Su cabeza parece un signo de interrogación invertido.'],
+  Hya: ['La constelación más grande del cielo: una serpiente de agua que cubre casi un cuarto del horizonte.'],
+  Crv: ['El cuervo, un pequeño cuadrilátero fácil de reconocer.'],
+  Vir: ['La doncella, la segunda constelación más grande. Hacia ella hay miles de galaxias.'],
+  Lib: ['La balanza, la única constelación del zodíaco que representa un objeto.'],
+  Oph: ['El portador de la serpiente: el Sol pasa por ella aunque no esté en el zodíaco tradicional.'],
+  Aql: ['El águila de Zeus. Con Vega y Deneb forma el Triángulo de Verano del norte.'],
+  Lyr: ['La lira de Orfeo, con la brillante Vega.'],
+  Cyg: ['El cisne, también llamado Cruz del Norte. Desde Chile se ve bajo en el norte.'],
+  Peg: ['El caballo alado. Su gran cuadrado es fácil de reconocer.'],
+  And: ['La princesa Andrómeda. Hacia ella está la galaxia de Andrómeda, a 2,5 millones de años luz.'],
+  Cas: ['La reina Casiopea, con forma de W. Desde Chile apenas asoma en el norte.'],
+  UMa: ['La Osa Mayor y su “cazo”. Desde Chile central solo se ve una parte, muy baja en el norte.'],
+  Boo: ['El boyero o pastor, con la brillante Arturo.'],
+  CrB: ['Una pequeña corona semicircular.'],
+  Her: ['El héroe Hércules, con el gran cúmulo globular M13.'],
+  Cap: ['La cabra con cola de pez, una de las constelaciones más antiguas.'],
+  Aqr: ['El aguador, en una zona del cielo llamada “el mar” por sus constelaciones acuáticas.'],
+  PsA: ['El pez austral, que bebe el agua del Aguador. Contiene a Fomalhaut.'],
+  Cet: ['La ballena o monstruo marino, con la estrella variable Mira.'],
+  Dor: ['El dorado (un pez). Contiene la mayor parte de la Nube Mayor de Magallanes.'],
+};
+// Objetos de cielo profundo (J2000) [nombre, AR°, Dec°, radio°, distancia (años luz), curiosidad, siempre etiquetar]
+const DSO = [
+  ['Nube Mayor de Magallanes', 80.89, -69.76, 5, 160000, 'Una galaxia satélite de la Vía Láctea. Desde lugares oscuros se ve a simple vista como una nube suave; contiene la Nebulosa de la Tarántula.', 1],
+  ['Nube Menor de Magallanes', 13.19, -72.83, 2.6, 200000, 'Otra pequeña galaxia vecina. Hernando de Magallanes y su tripulación la describieron en su viaje alrededor del mundo.', 1],
+  ['Omega Centauri', 201.70, -47.48, 0.6, 17000, 'El cúmulo globular más grande de la Vía Láctea: unos 10 millones de estrellas. Se ve a simple vista como una estrella borrosa.', 0],
+  ['47 Tucanae', 6.02, -72.08, 0.4, 15000, 'El segundo cúmulo globular más brillante, con millones de estrellas muy antiguas.', 0],
+  ['Pléyades', 56.75, 24.12, 1, 444, 'Las “Siete Cabrillas”: un cúmulo de estrellas jóvenes azules. A simple vista se ven unas 6 o 7.', 0],
+  ['Nebulosa de Orión', 83.82, -5.39, 0.5, 1344, 'Una nube de gas donde están naciendo estrellas. Se ve a simple vista bajo las Tres Marías.', 0],
+  ['Nebulosa de Carina', 161.26, -59.87, 1, 7500, 'Una enorme nube de gas brillante, más grande y brillante que la de Orión. Contiene la estrella gigante Eta Carinae.', 0],
+  ['Saco de Carbón', 192.5, -62.5, 3, 600, 'Una nube oscura de polvo que tapa las estrellas de la Vía Láctea, junto a la Cruz del Sur. Los pueblos andinos la ven como parte de la “llama” celeste.', 0],
+  ['El Joyero', 193.4, -60.33, 0.2, 6400, 'Un pequeño cúmulo de estrellas de colores junto a Mimosa. Con binoculares parece un cofre de joyas.', 0],
+  ['Galaxia de Andrómeda', 10.68, 41.27, 1.5, 2500000, 'La galaxia grande más cercana. Su luz salió de allí hace 2,5 millones de años. Desde Chile se ve muy baja en el norte.', 0],
+  ['Centro de la Vía Láctea', 266.42, -29.01, 1, 26000, 'Hacia aquí, detrás del polvo, está el agujero negro supermasivo Sagitario A*, con 4 millones de veces la masa del Sol.', 0],
+];
+const BODY_INFO = {
+  sol: ['Sol', 'Estrella', '¡Nunca lo mires directamente! Su luz tarda unos 8 minutos y 20 segundos en llegar a la Tierra.'],
+  luna: ['Luna', 'Satélite natural', 'Siempre nos muestra la misma cara. Se aleja de la Tierra unos 3,8 cm cada año.'],
+  mercurio: ['Mercurio', 'Planeta', 'El planeta más cercano al Sol: un año allí dura solo 88 días. Se ve siempre cerca del horizonte al amanecer o al atardecer.'],
+  venus: ['Venus', 'Planeta', 'El astro más brillante después del Sol y la Luna, el “lucero”. Es el planeta más caliente: unos 465 °C en la superficie.'],
+  marte: ['Marte', 'Planeta', 'Su color rojizo se debe al óxido de hierro. Tiene el volcán más grande conocido, el Monte Olimpo.'],
+  jupiter: ['Júpiter', 'Planeta', 'El planeta más grande: cabrían más de 1.300 Tierras. Con binoculares se ven sus 4 lunas principales.'],
+  saturno: ['Saturno', 'Planeta', 'Sus anillos de hielo y roca se ven con un telescopio pequeño. Es tan poco denso que flotaría en el agua.'],
+};
+const PLANETS = ['mercurio', 'venus', 'marte', 'jupiter', 'saturno'];
+const PCOLOR = { mercurio: [210, 200, 190], venus: [255, 250, 225], marte: [255, 140, 90], jupiter: [255, 225, 185], saturno: [240, 215, 160] };
+const DEFAULT_LOC = { lat: -33.0422, lon: -71.3733, name: 'Villa Alemana, Chile', def: true };
+
+/* =================== Estado =================== */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const $ = id => document.getElementById(id);
+const canvas = $('sky'), ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const S = {
+  loc: DEFAULT_LOC, timeOffset: 0, playing: false, night: false,
+  mode: 'manual', // 'sensor' | 'manual'
+  az: 180 * D2R, alt: 35 * D2R, fov: 75, // vista manual (mirando al sur)
+  show: { const: true, names: true, mw: true, grid: false },
+  target: null, selected: null,
+};
+const N = STARS.length;
+const sx = new Float32Array(N), sy = new Float32Array(N), sVis = new Uint8Array(N);
+const ex = new Float32Array(N), ey = new Float32Array(N), ez = new Float32Array(N); // ecuatorial de la fecha
+const twPh = new Float32Array(N), twFr = new Float32Array(N);
+for (let i = 0; i < N; i++) { twPh[i] = Math.random() * 6.283; twFr[i] = 1.5 + Math.random() * 3; }
+let precT = null, PMAT = null;
+const bodies = {}; // vectores ecuatoriales de la fecha
+let sunAltDeg = -90;
+
+/* =================== Utilidades =================== */
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+const fmt = (x, d = 0) => x.toLocaleString('es-CL', { maximumFractionDigits: d, minimumFractionDigits: d });
+function rgb(r, g, b, a = 1) {
+  if (S.night) { const l = 0.3 * r + 0.55 * g + 0.15 * b; return `rgba(${Math.round(l * 0.95)},${Math.round(l * 0.06)},${Math.round(l * 0.04)},${a})`; }
+  return `rgba(${r},${g},${b},${a})`;
+}
+function tempColor(k) { // temperatura (K) -> color aproximado
+  const t = [[3000, 255, 170, 110], [4000, 255, 204, 153], [5000, 255, 229, 207], [6000, 255, 244, 234], [7500, 248, 247, 255], [10000, 202, 215, 255], [30000, 160, 185, 255]];
+  if (k <= t[0][0]) return t[0].slice(1);
+  for (let i = 1; i < t.length; i++) if (k <= t[i][0]) {
+    const f = (k - t[i - 1][0]) / (t[i][0] - t[i - 1][0]);
+    return [0, 1, 2].map(j => Math.round(t[i - 1][j + 1] + f * (t[i][j + 1] - t[i - 1][j + 1])));
+  }
+  return t[t.length - 1].slice(1);
+}
+function colorName(k) {
+  return k >= 10000 ? 'azul-blanca' : k >= 7500 ? 'blanca' : k >= 6000 ? 'blanco-amarillenta' : k >= 5000 ? 'amarilla' : k >= 4000 ? 'anaranjada' : 'roja';
+}
+const CONST_BY_CODE = Object.fromEntries(CONSTS.map(c => [c.c, c]));
+const CONST_NAME = { ...Object.fromEntries(CONSTS.map(c => [c.c, c.n])), Ant: 'Máquina Neumática', Aps: 'Ave del Paraíso', Cha: 'Camaleón', Cir: 'Compás', Ind: 'Indio', Men: 'Mesa', Mic: 'Microscopio', Nor: 'Escuadra', Oct: 'Octante', Pic: 'Pintor', Ret: 'Retículo', Scl: 'Escultor', For: 'Horno', Hor: 'Reloj', Cae: 'Cincel', Vol: 'Pez Volador', Tel: 'Telescopio', Mon: 'Unicornio', Sex: 'Sextante', Crt: 'Copa', Ser: 'Serpiente', Sct: 'Escudo', Sge: 'Flecha', Vul: 'Raposa', Del: 'Delfín', Equ: 'Caballito', Psc: 'Piscis', Tri: 'Triángulo', Lyn: 'Lince', LMi: 'León Menor', Com: 'Cabellera de Berenice', CVn: 'Lebreles', Dra: 'Dragón', UMi: 'Osa Menor', Cep: 'Cefeo', Cam: 'Jirafa', Lac: 'Lagarto', Cnc: 'Cáncer' };
+
+// Datos por estrella: clave Bayer y nombre en español
+const starKey = i => STARS[i][4] ? STARS[i][4].replace(/[¹²³⁴⁵⁶⁷⁸⁹]/g, '') + ' ' + STARS[i][5] : '';
+const KEY_FIRST = {};
+for (let i = 0; i < N; i++) { const k = starKey(i); if (k && !(k in KEY_FIRST)) KEY_FIRST[k] = i; }
+function starName(i) {
+  const k = starKey(i);
+  if (KEY_FIRST[k] === i && STAR_INFO[k]) return STAR_INFO[k][0];
+  const n = STARS[i][6];
+  if (n) return STAR_NAMES_ES[n] || n;
+  return '';
+}
+function starLabel(i) { return starName(i) || (STARS[i][4] ? `${STARS[i][4]} ${CONST_NAME[STARS[i][5]] || STARS[i][5]}` : `Estrella HR`); }
+
+/* =================== Tiempo y posiciones =================== */
+const simDate = () => new Date(Date.now() + S.timeOffset);
+let frameDate = simDate(), HM = null; // matriz horizonte del cuadro actual
+let lastBodies = 0;
+function updateEphemeris(date) {
+  const T = Astro.centuries(date);
+  if (precT === null || Math.abs(T - precT) > 0.02) { // re-precesar estrellas si cambia >2 años
+    precT = T; PMAT = Astro.precessionMatrix(T);
+    for (let i = 0; i < N; i++) {
+      const v = Astro.mulMV(PMAT, Astro.radecToVec(STARS[i][0], STARS[i][1]));
+      ex[i] = v[0]; ey[i] = v[1]; ez[i] = v[2];
+    }
+    for (const d of DSO) d.vec = Astro.mulMV(PMAT, Astro.radecToVec(d[1], d[2]));
+    buildMilkyWay();
+  }
+  const lst = Astro.gmst(date) + S.loc.lon;
+  const s = Astro.sun(T); bodies.sol = { vec: s.vec, lon: s.lon, dist: s.dist };
+  // Luna topocéntrica: restamos la posición del observador (corrige ~1° de paralaje)
+  const m = Astro.moon(T), er = m.dist / 6378.14, la = S.loc.lat * D2R, th = lst * D2R;
+  const mv = [m.vec[0] * er - Math.cos(la) * Math.cos(th), m.vec[1] * er - Math.cos(la) * Math.sin(th), m.vec[2] * er - Math.sin(la)];
+  const ml = Math.hypot(...mv);
+  bodies.luna = { vec: mv.map(x => x / ml), dist: ml * 6378.14, lon: m.lon };
+  for (const p of PLANETS) { const r = Astro.planet(p, T); bodies[p] = { ...r, vec: Astro.mulMV(PMAT, r.vec) }; }
+}
+function frameMatrix(date) {
+  const lst = Astro.gmst(date) + S.loc.lon;
+  return Astro.horizonMatrix(lst, S.loc.lat);
+}
+const toHor = v => Astro.mulMV(HM, v); // ecuatorial de la fecha -> [E, N, Z]
+function altAz(v) { const h = toHor(v); return [Math.asin(clamp(h[2], -1, 1)) * R2D, Astro.n360(Math.atan2(h[0], h[1]) * R2D)]; }
+const DIRS = ['Norte', 'Noreste', 'Este', 'Sureste', 'Sur', 'Suroeste', 'Oeste', 'Noroeste'];
+const DIRS_S = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+const dirName = az => DIRS[Math.round(az / 45) % 8];
+
+/* =================== Cámara / proyección =================== */
+// Base de la cámara en coordenadas del horizonte (E, N, Z)
+let camR = [1, 0, 0], camU = [0, 0, 1], camF = [0, 1, 0], scale = 1;
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function setManualCamera() {
+  const ca = Math.cos(S.alt), sa = Math.sin(S.alt), cz = Math.cos(S.az), sz = Math.sin(S.az);
+  camF = [sz * ca, cz * ca, sa];
+  camR = [cz, -sz, 0];
+  camU = cross(camR, camF);
+}
+function updateScale() { scale = (Math.max(W, H) / 2) / (2 * Math.tan(S.fov * D2R / 4)); }
+// Proyección estereográfica: suave incluso con campos de visión amplios
+let PX = 0, PY = 0, PZ = 0;
+function project(h) { // h en (E,N,Z). Devuelve false si queda detrás
+  const x = dot(h, camR), y = dot(h, camU), z = dot(h, camF);
+  PZ = z;
+  if (z < -0.6) return false;
+  const k = 2 / (1 + z) * scale;
+  PX = W / 2 + x * k; PY = H / 2 - y * k;
+  return true;
+}
+
+/* =================== Sensores de orientación =================== */
+const OR = { has: false, q: null, tq: null, iosCorr: null, absolute: false, last: 0 };
+function screenAngle() {
+  if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+  return typeof window.orientation === 'number' ? window.orientation : 0;
+}
+function eulerToMat(a, b, g) { // W3C: R = Rz(α)·Rx(β)·Ry(γ); columnas = ejes del teléfono en (E,N,Z)
+  const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
+  return [cA * cG - sA * sB * sG, -cB * sA, cA * sG + cG * sA * sB,
+    cG * sA + cA * sB * sG, cA * cB, sA * sG - cA * cG * sB,
+    -cB * sG, sB, cB * cG];
+}
+function matToQuat(m) {
+  let w, x, y, z, s; const tr = m[0] + m[4] + m[8];
+  if (tr > 0) { s = Math.sqrt(tr + 1) * 2; w = s / 4; x = (m[7] - m[5]) / s; y = (m[2] - m[6]) / s; z = (m[3] - m[1]) / s; }
+  else if (m[0] > m[4] && m[0] > m[8]) { s = Math.sqrt(1 + m[0] - m[4] - m[8]) * 2; w = (m[7] - m[5]) / s; x = s / 4; y = (m[1] + m[3]) / s; z = (m[2] + m[6]) / s; }
+  else if (m[4] > m[8]) { s = Math.sqrt(1 + m[4] - m[0] - m[8]) * 2; w = (m[2] - m[6]) / s; x = (m[1] + m[3]) / s; y = s / 4; z = (m[5] + m[7]) / s; }
+  else { s = Math.sqrt(1 + m[8] - m[0] - m[4]) * 2; w = (m[3] - m[1]) / s; x = (m[2] + m[6]) / s; y = (m[5] + m[7]) / s; z = s / 4; }
+  return [w, x, y, z];
+}
+function quatToMat([w, x, y, z]) {
+  return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+    2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+    2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)];
+}
+function onOrientation(e, isAbs) {
+  if (e.alpha == null || e.beta == null) return;
+  let alpha = e.alpha;
+  if (typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) {
+    // iOS: alpha tiene un cero arbitrario; lo corregimos con la brújula
+    const m = eulerToMat(alpha * D2R, e.beta * D2R, e.gamma * D2R);
+    const top = [m[1], m[4], m[7]], back = [-m[2], -m[5], -m[8]];
+    const v = Math.abs(top[2]) > 0.7 ? back : top;
+    if (Math.hypot(v[0], v[1]) > 0.3) {
+      const azRel = Math.atan2(v[0], v[1]) * R2D, corr = (e.webkitCompassHeading - azRel) * D2R;
+      if (!OR.iosCorr) OR.iosCorr = [Math.cos(corr), Math.sin(corr)];
+      else { OR.iosCorr[0] += 0.08 * (Math.cos(corr) - OR.iosCorr[0]); OR.iosCorr[1] += 0.08 * (Math.sin(corr) - OR.iosCorr[1]); }
+    }
+    if (OR.iosCorr) alpha -= Math.atan2(OR.iosCorr[1], OR.iosCorr[0]) * R2D;
+    OR.absolute = true;
+  } else if (isAbs || e.absolute) OR.absolute = true;
+  else if (OR.absolute) return; // ya recibimos datos absolutos: ignorar los relativos
+  const m = eulerToMat(alpha * D2R, e.beta * D2R, (e.gamma || 0) * D2R);
+  const q = matToQuat(m);
+  OR.tq = q; if (!OR.q) OR.q = q.slice();
+  OR.has = true; OR.last = performance.now();
+  if (S.mode !== 'sensor' && !OR.manualChosen) setMode('sensor');
+}
+function startSensors() {
+  if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', e => onOrientation(e, true));
+  window.addEventListener('deviceorientation', e => onOrientation(e, false));
+}
+function sensorCamera(dt) {
+  // Suavizado: interpolación de cuaterniones hacia la última lectura
+  const t = OR.tq, q = OR.q;
+  if (dot4(q, t) < 0) for (let i = 0; i < 4; i++) t[i] = -t[i];
+  const k = 1 - Math.exp(-dt / 0.07);
+  for (let i = 0; i < 4; i++) q[i] += k * (t[i] - q[i]);
+  const l = Math.hypot(...q); for (let i = 0; i < 4; i++) q[i] /= l;
+  const m = quatToMat(q);
+  const X = [m[0], m[3], m[6]], Y = [m[1], m[4], m[7]], Z = [m[2], m[5], m[8]];
+  const a = screenAngle() * D2R, c = Math.cos(a), s = Math.sin(a);
+  camR = [c * X[0] - s * Y[0], c * X[1] - s * Y[1], c * X[2] - s * Y[2]];
+  camU = [s * X[0] + c * Y[0], s * X[1] + c * Y[1], s * X[2] + c * Y[2]];
+  camF = [-Z[0], -Z[1], -Z[2]];
+}
+const dot4 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+function setMode(m, quiet) {
+  S.mode = m;
+  $('bSensor').classList.toggle('on', m === 'sensor');
+  $('bSensor').lastElementChild.textContent = m === 'sensor' ? 'Sensores' : 'Manual';
+  $('bSensor').firstElementChild.textContent = m === 'sensor' ? '🧭' : '✋';
+  if (!quiet) toast(m === 'sensor' ? 'Apunta el celular al cielo' : 'Modo manual: arrastra el cielo con el dedo');
+}
+function camToManual() { // al pasar a manual, conservar hacia dónde se miraba
+  S.alt = Math.asin(clamp(camF[2], -1, 1));
+  S.az = Math.atan2(camF[0], camF[1]);
+}
+
+/* =================== Vía Láctea y Nubes de Magallanes =================== */
+let MW = []; // [vec ecuatorial fecha, radio°, intensidad]
+const sq = x => x * x;
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+function buildMilkyWay() {
+  const r = rng(12345); MW = [];
+  const gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += r(); return (u - 3) / 1.22; };
+  for (let i = 0; i < 900; i++) {
+    const l = r() * 360, dl = Math.min(l, 360 - l);
+    const width = 3 + 5 * Math.exp(-sq(dl / 40));
+    const b = gauss() * width;
+    let I = 0.35 + 0.75 * Math.exp(-sq(dl / 45)) + 0.3 * Math.exp(-sq((((l - 287 + 540) % 360) - 180) / 25)); // brillo extra hacia Carina
+    if (l > 296 && l < 306 && b > -5 && b < 3) I *= 0.25;          // Saco de Carbón
+    if (l > 10 && l < 55 && b > -1.5 && b < 4) I *= 0.45;          // Gran Grieta
+    I *= Math.exp(-sq(b / (width * 1.6)));
+    MW.push([Astro.mulMV(PMAT, Astro.galToVec(l, b)), 2.5 + r() * 4, I]);
+  }
+  const nubes = [[80.89, -69.76, 4.2, 0.75, 45], [13.19, -72.83, 2.2, 0.6, 22]];
+  for (const [ra, dec, rad, I, n] of nubes) for (let i = 0; i < n; i++) {
+    const a = r() * 6.283, d = Math.sqrt(r()) * rad;
+    MW.push([Astro.mulMV(PMAT, Astro.radecToVec(ra + d * Math.cos(a) / Math.cos(dec * D2R), dec + d * Math.sin(a) * 0.8)), rad * 0.5, I]);
+  }
+}
+const mwCanvas = document.createElement('canvas'), mwCtx = mwCanvas.getContext('2d');
+const SPRITES = {};
+function sprite(r, g, b, key, hard) {
+  const k = key + (S.night ? 'n' : 'd');
+  if (SPRITES[k]) return SPRITES[k];
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  if (hard) { gr.addColorStop(0, rgb(255, 255, 255, 1)); gr.addColorStop(0.18, rgb(r, g, b, 0.9)); gr.addColorStop(0.4, rgb(r, g, b, 0.18)); gr.addColorStop(1, rgb(r, g, b, 0)); }
+  else { gr.addColorStop(0, rgb(r, g, b, 1)); gr.addColorStop(0.5, rgb(r, g, b, 0.35)); gr.addColorStop(1, rgb(r, g, b, 0)); }
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  return SPRITES[k] = c;
+}
+
+/* =================== Dibujo =================== */
+let pickables = []; // objetos con posición en pantalla para tocar
+let constLabelPos = [];
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  mwCanvas.width = Math.ceil(W / 4); mwCanvas.height = Math.ceil(H / 4);
+  updateScale();
+}
+function skyColors() {
+  const s = sunAltDeg; // -18 noche cerrada … 0 horizonte … >0 día
+  const f = clamp((s + 18) / 18, 0, 1), d = clamp(s / 10, 0, 1);
+  const lerp = (a, b, t) => a.map((x, i) => Math.round(x + (b[i] - x) * t));
+  let top = lerp([2, 4, 14], [16, 30, 70], f), bot = lerp([10, 18, 42], [70, 70, 110], f);
+  top = lerp(top, [40, 100, 190], d); bot = lerp(bot, [130, 180, 230], d);
+  return [top, bot, 1 - 0.75 * clamp((s + 12) / 12, 0, 1)];
+}
+function drawBackground(starDim) {
+  const [top, bot] = skyColors();
+  // El degradado se orienta según dónde está el horizonte en pantalla
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  const up = camF[2]; // mirando hacia arriba => más oscuro
+  const t = clamp(0.5 + up * 0.8, 0, 1);
+  const mix = (a, b, k) => a.map((x, i) => Math.round(x + (b[i] - x) * k));
+  g.addColorStop(0, rgb(...mix(bot, top, clamp(t + 0.3, 0, 1))));
+  g.addColorStop(1, rgb(...mix(bot, top, clamp(t - 0.3, 0, 1))));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function drawMilkyWay(alphaMul) {
+  const c = mwCtx, w = mwCanvas.width, h = mwCanvas.height;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, w, h);
+  c.globalCompositeOperation = 'lighter';
+  const sp = sprite(190, 205, 255, 'mw', false), q = 0.25;
+  for (const [v, rad, I] of MW) {
+    const hv = toHor(v);
+    if (!project(hv)) continue;
+    const r = rad * D2R * scale * 2 / (1 + PZ) * q;
+    const x = PX * q, y = PY * q;
+    if (x < -r || y < -r || x > w + r || y > h + r) continue;
+    c.globalAlpha = Math.min(1, I * 0.085 * (hv[2] < 0 ? 0.4 : 1));
+    c.drawImage(sp, x - r, y - r, r * 2, r * 2);
+  }
+  c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = alphaMul;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(mwCanvas, 0, 0, w, h, 0, 0, w / q, h / q);
+  ctx.globalAlpha = 1;
+}
+function drawGround() {
+  // Polígono del horizonte; se oscurece la región bajo él (la que contiene el nadir)
+  const pts = []; let ok = true;
+  for (let a = 0; a <= 360; a += 3) {
+    const h = [Math.sin(a * D2R), Math.cos(a * D2R), 0];
+    const x = dot(h, camR), y = dot(h, camU), z = dot(h, camF);
+    const k = 2 / Math.max(1 + z, 1e-4) * scale;
+    pts.push([W / 2 + x * k, H / 2 - y * k, z]);
+  }
+  const path = new Path2D();
+  pts.forEach((p, i) => i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]));
+  path.closePath();
+  const nadirVisible = project([0, 0, -1]);
+  const nadirInside = nadirVisible && ctx.isPointInPath(path, PX * DPR, PY * DPR);
+  ctx.fillStyle = rgb(4, 7, 12, 0.62);
+  if (nadirInside) ctx.fill(path);
+  else { const p2 = new Path2D(); p2.rect(-10, -10, W + 20, H + 20); p2.addPath(path); ctx.fill(p2, 'evenodd'); }
+  // línea de horizonte
+  ctx.strokeStyle = rgb(140, 180, 255, 0.55); ctx.lineWidth = 1.4;
+  ctx.beginPath(); let pen = false;
+  for (const p of pts) { if (p[2] < -0.5) { pen = false; continue; } pen ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); pen = true; }
+  ctx.stroke();
+  // puntos cardinales y marcas cada 15°
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let a = 0; a < 360; a += 15) {
+    const h = [Math.sin(a * D2R), Math.cos(a * D2R), 0];
+    if (!project(h) || PZ < -0.3) continue;
+    if (a % 45 === 0) {
+      const i = a / 45, main = i % 2 === 0;
+      ctx.font = `${main ? 600 : 500} ${main ? 18 : 13}px system-ui,sans-serif`;
+      ctx.fillStyle = a === 0 ? rgb(255, 120, 110, 0.95) : rgb(200, 220, 255, main ? 0.95 : 0.7);
+      ctx.fillText(DIRS_S[i], PX, PY + 16);
+      ctx.fillRect(PX - 0.75, PY - 6, 1.5, 12);
+    } else { ctx.fillStyle = rgb(160, 190, 255, 0.4); ctx.fillRect(PX - 0.5, PY - 3, 1, 6); }
+  }
+}
+function drawGrid() {
+  ctx.strokeStyle = rgb(120, 160, 255, 0.13); ctx.lineWidth = 1;
+  for (let alt = 15; alt < 90; alt += 15) {
+    ctx.beginPath(); let pen = false;
+    for (let a = 0; a <= 360; a += 4) {
+      const h = [Math.sin(a * D2R) * Math.cos(alt * D2R), Math.cos(a * D2R) * Math.cos(alt * D2R), Math.sin(alt * D2R)];
+      if (!project(h) || PZ < -0.3) { pen = false; continue; }
+      pen ? ctx.lineTo(PX, PY) : ctx.moveTo(PX, PY); pen = true;
+    }
+    ctx.stroke();
+    const h = [Math.sin(S.az) * Math.cos(alt * D2R), Math.cos(S.az) * Math.cos(alt * D2R), Math.sin(alt * D2R)];
+    if (project(h) && PZ > 0) { ctx.fillStyle = rgb(150, 180, 255, 0.4); ctx.font = '11px system-ui'; ctx.fillText(alt + '°', PX + 14, PY - 6); }
+  }
+  for (let a = 0; a < 360; a += 45) {
+    ctx.beginPath(); let pen = false;
+    for (let alt = 0; alt <= 90; alt += 5) {
+      const h = [Math.sin(a * D2R) * Math.cos(alt * D2R), Math.cos(a * D2R) * Math.cos(alt * D2R), Math.sin(alt * D2R)];
+      if (!project(h) || PZ < -0.3) { pen = false; continue; }
+      pen ? ctx.lineTo(PX, PY) : ctx.moveTo(PX, PY); pen = true;
+    }
+    ctx.stroke();
+  }
+}
+function drawConstellations(starDim) {
+  constLabelPos = [];
+  for (const c of CONSTS) {
+    const hl = c.h, sel = S.selected && S.selected.type === 'const' && S.selected.c === c;
+    ctx.strokeStyle = sel ? rgb(255, 225, 150, 0.95) : hl ? rgb(255, 205, 130, 0.55 * starDim + 0.1) : rgb(130, 170, 255, 0.32 * starDim + 0.06);
+    ctx.lineWidth = sel ? 2.2 : hl ? 1.5 : 1;
+    ctx.beginPath();
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, n = 0;
+    for (const poly of c.l) {
+      let pen = false;
+      for (const i of poly) {
+        if (!sVis[i]) { pen = false; continue; }
+        // acortar un poco las líneas para que no tapen las estrellas
+        if (pen) ctx.lineTo(sx[i], sy[i]); else ctx.moveTo(sx[i], sy[i]);
+        pen = true; n++;
+        if (sx[i] < x0) x0 = sx[i]; if (sx[i] > x1) x1 = sx[i]; if (sy[i] < y0) y0 = sy[i]; if (sy[i] > y1) y1 = sy[i];
+      }
+    }
+    ctx.stroke();
+    // etiqueta en el centro de la figura (centro angular, no en pantalla)
+    let cx = 0, cy = 0, cz = 0, m = 0;
+    for (const poly of c.l) for (const i of poly) { cx += ex[i]; cy += ey[i]; cz += ez[i]; m++; }
+    const l = Math.hypot(cx, cy, cz);
+    const hv = toHor([cx / l, cy / l, cz / l]);
+    if (!project(hv) || PZ < -0.2) continue;
+    let lx = PX, ly = PY;
+    if (n && y1 - y0 < 170 && x1 - x0 < 260) { lx = (x0 + x1) / 2; ly = y1 + 18; } // figuras pequeñas: nombre debajo
+    if (lx > -50 && lx < W + 50 && ly > -50 && ly < H + 50) constLabelPos.push([c, lx, ly, hv[2]]);
+  }
+}
+function drawStars(t, starDim) {
+  const zoom = clamp(Math.pow(75 / S.fov, 0.35), 0.8, 2.2);
+  const magLim = S.fov > 110 ? 4.4 : S.fov > 85 ? 4.9 : 5.3;
+  const R = HM, r0 = camR, u0 = camU, f0 = camF;
+  // filas combinadas: (cámara) · (horizonte)
+  const mr = [0, 1, 2].map(j => r0[0] * R[j] + r0[1] * R[3 + j] + r0[2] * R[6 + j]);
+  const mu = [0, 1, 2].map(j => u0[0] * R[j] + u0[1] * R[3 + j] + u0[2] * R[6 + j]);
+  const mf = [0, 1, 2].map(j => f0[0] * R[j] + f0[1] * R[3 + j] + f0[2] * R[6 + j]);
+  const cxw = W / 2, cyh = H / 2, sc2 = 2 * scale;
+  for (let i = 0; i < N; i++) {
+    const x = ex[i], y = ey[i], z = ez[i];
+    const fz = mf[0] * x + mf[1] * y + mf[2] * z;
+    sVis[i] = 0;
+    if (fz < -0.6) continue;
+    const k = sc2 / (1 + fz);
+    const px = cxw + (mr[0] * x + mr[1] * y + mr[2] * z) * k, py = cyh - (mu[0] * x + mu[1] * y + mu[2] * z) * k;
+    sx[i] = px; sy[i] = py; sVis[i] = 1;
+    if (px < -20 || py < -20 || px > W + 20 || py > H + 20) continue;
+    const st = STARS[i], mag = st[2];
+    if (mag > magLim) continue;
+    const up = R[6] * x + R[7] * y + R[8] * z;
+    const below = up < 0;
+    let a = clamp((6.3 - mag) / 2.3, 0.3, 1) * starDim * (below ? 0.35 : 1);
+    // titileo: más fuerte cerca del horizonte
+    a *= 1 + (0.1 + 0.25 * (1 - clamp(up * 3, 0, 1))) * Math.sin(t * twFr[i] + twPh[i]);
+    a = clamp(a, 0, 1);
+    const rad = Math.max(0.7, (5.8 - mag) * 0.58) * zoom;
+    const col = st.col || (st.col = tempColor(st[3] * 100));
+    if (mag < 2.3) {
+      const sp = sprite(col[0], col[1], col[2], 'st' + st[3], true), g = rad * 4.2;
+      ctx.globalAlpha = a; ctx.drawImage(sp, px - g, py - g, g * 2, g * 2);
+    } else {
+      const ck = S.night ? 'cssN' : 'css';
+      ctx.globalAlpha = a; ctx.fillStyle = st[ck] || (st[ck] = rgb(col[0], col[1], col[2], 1));
+      if (rad < 1.3) ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+      else { ctx.beginPath(); ctx.arc(px, py, rad, 0, 6.2832); ctx.fill(); }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function drawMoon(px, py, r) {
+  const sun = toHor(bodies.sol.vec), mv = toHor(bodies.luna.vec);
+  const el = Math.acos(clamp(dot(sun, mv), -1, 1)); // elongación
+  const i = Math.PI - el; // ángulo de fase
+  // dirección del Sol vista en la pantalla desde la Luna
+  const tng = sun.map((s, j) => s - dot(sun, mv) * mv[j]), tl = Math.hypot(...tng) || 1;
+  const p2 = mv.map((m, j) => m + 0.02 * tng[j] / tl);
+  let ang = 0;
+  if (project(p2)) ang = Math.atan2(PY - py, PX - px);
+  ctx.save(); ctx.translate(px, py); ctx.rotate(ang);
+  const glow = sprite(255, 250, 230, 'moonglow', false);
+  ctx.globalAlpha = 0.5; ctx.drawImage(glow, -r * 4, -r * 4, r * 8, r * 8); ctx.globalAlpha = 1;
+  ctx.fillStyle = rgb(40, 44, 58, 0.95); ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.fill();
+  const c = Math.cos(i);
+  ctx.fillStyle = rgb(250, 246, 230, 1);
+  ctx.beginPath(); ctx.moveTo(0, -r);
+  ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false);           // borde iluminado (lado del Sol, +x)
+  ctx.ellipse(0, 0, Math.abs(c) * r, r, 0, Math.PI / 2, -Math.PI / 2, c < 0); // terminador
+  ctx.fill();
+  ctx.restore();
+}
+function drawBodies(t, starDim) {
+  const order = ['sol', 'luna', ...PLANETS];
+  for (const name of order) {
+    const b = bodies[name]; if (!b) continue;
+    const hv = toHor(b.vec); b.hor = hv;
+    if (!project(hv)) { b.vis = false; continue; }
+    b.vis = true; b.sx = PX; b.sy = PY;
+    if (PX < -60 || PY < -60 || PX > W + 60 || PY > H + 60) continue;
+    const below = hv[2] < 0;
+    ctx.globalAlpha = below ? 0.45 : 1;
+    if (name === 'sol') {
+      const r = Math.max(9, 0.27 * D2R * scale * 2);
+      ctx.drawImage(sprite(255, 220, 140, 'sunglow', false), PX - r * 5, PY - r * 5, r * 10, r * 10);
+      ctx.fillStyle = rgb(255, 245, 210); ctx.beginPath(); ctx.arc(PX, PY, r, 0, 6.2832); ctx.fill();
+    } else if (name === 'luna') {
+      drawMoon(PX, PY, Math.max(10, 0.26 * D2R * scale * 2));
+    } else {
+      const col = PCOLOR[name], rad = clamp(4.2 - b.mag * 0.55, 2.4, 6.5) * clamp(Math.pow(75 / S.fov, 0.3), 0.9, 2);
+      ctx.drawImage(sprite(col[0], col[1], col[2], 'pl' + name, true), PX - rad * 4, PY - rad * 4, rad * 8, rad * 8);
+      ctx.fillStyle = rgb(...col); ctx.beginPath(); ctx.arc(PX, PY, rad * 0.8, 0, 6.2832); ctx.fill();
+      if (name === 'saturno') {
+        ctx.strokeStyle = rgb(240, 220, 170, 0.8); ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.ellipse(PX, PY, rad * 2, rad * 0.7, -0.4, 0, 6.2832); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+function drawDSO() {
+  for (const d of DSO) {
+    const hv = toHor(d.vec);
+    if (!project(hv) || PZ < 0) { d.vis = false; continue; }
+    d.vis = true; d.sx = PX; d.sy = PY;
+    if (d[3] < 2) { // marcas pequeñas para cúmulos y nebulosas
+      const r = Math.max(5, d[3] * D2R * scale * 2 / (1 + PZ));
+      ctx.globalAlpha = hv[2] < 0 ? 0.3 : 0.7;
+      ctx.drawImage(sprite(200, 210, 255, 'dso', false), PX - r * 1.6, PY - r * 1.6, r * 3.2, r * 3.2);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+function label(text, x, y, color, font, alpha = 1) {
+  ctx.font = font; ctx.globalAlpha = alpha;
+  ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.globalAlpha = 1;
+}
+function drawLabels(starDim) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const taken = [];
+  const free = (x, y, w) => { for (const [a, b, c] of taken) if (Math.abs(a - x) < (w + c) / 2 && Math.abs(b - y) < 14) return false; taken.push([x, y, w]); return true; };
+  // cuerpos del sistema solar primero
+  for (const name of ['sol', 'luna', ...PLANETS]) {
+    const b = bodies[name]; if (!b || !b.vis) continue;
+    const t = BODY_INFO[name][0], off = name === 'luna' || name === 'sol' ? 24 : 15;
+    free(b.sx, b.sy + off, t.length * 8);
+    label(t, b.sx, b.sy + off, rgb(255, 225, 160), '600 13px system-ui,sans-serif', b.hor[2] < 0 ? 0.5 : 1);
+  }
+  if (S.show.const) for (const [c, x, y, up] of constLabelPos) {
+    const t = c.n.toUpperCase();
+    if (!free(x, y, t.length * 7.5)) continue;
+    label(t, x, y, c.h ? rgb(255, 210, 140) : rgb(150, 180, 255), `${c.h ? 600 : 500} ${c.h ? 12.5 : 11}px system-ui,sans-serif`, (up < 0 ? 0.4 : 0.85));
+  }
+  for (const d of DSO) if (d.vis && (d[6] || S.fov < 60)) {
+    if (free(d.sx, d.sy + 14, d[0].length * 6.5)) label(d[0], d.sx, d.sy + (d[6] ? 0 : 14), rgb(190, 205, 255), 'italic 11px system-ui,sans-serif', 0.75);
+  }
+  if (S.show.names) {
+    const lim = 1.6 + clamp((75 - S.fov) / 18, 0, 2.5);
+    ctx.textAlign = 'left';
+    for (let i = 0; i < N; i++) {
+      const m = STARS[i][2]; if (m > lim) break; // ordenadas por brillo
+      if (!sVis[i] || sx[i] < 0 || sy[i] < 0 || sx[i] > W || sy[i] > H) continue;
+      const n = starName(i); if (!n) continue;
+      if (!free(sx[i] + 8 + n.length * 3.3, sy[i], n.length * 6.6)) continue;
+      const up = HM[6] * ex[i] + HM[7] * ey[i] + HM[8] * ez[i];
+      label(n, sx[i] + 7, sy[i] - 1, rgb(215, 225, 245), '11.5px system-ui,sans-serif', (up < 0 ? 0.35 : 0.8) * Math.max(starDim, 0.5));
+    }
+    ctx.textAlign = 'center';
+  }
+}
+function targetVec(tg) {
+  if (!tg) return null;
+  if (tg.type === 'star') return [ex[tg.i], ey[tg.i], ez[tg.i]];
+  if (tg.type === 'body') return bodies[tg.name].vec;
+  if (tg.type === 'dso') return tg.d.vec;
+  if (tg.type === 'const') {
+    let cx = 0, cy = 0, cz = 0;
+    for (const poly of tg.c.l) for (const i of poly) { cx += ex[i]; cy += ey[i]; cz += ez[i]; }
+    const l = Math.hypot(cx, cy, cz); return [cx / l, cy / l, cz / l];
+  }
+}
+function drawTarget(t) {
+  const tg = S.target; if (!tg) return;
+  const v = toHor(targetVec(tg));
+  const x = dot(v, camR), y = dot(v, camU), z = dot(v, camF);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+  const onScreen = project(v) && PZ > 0 && PX > 30 && PX < W - 30 && PY > 110 && PY < H - 170;
+  const col = rgb(255, 210, 120, 1);
+  if (onScreen) {
+    const r = 22 + pulse * 6;
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.arc(PX, PY, r, 0, 6.2832); ctx.stroke();
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * (r + 4), PY + Math.sin(a) * (r + 4)); ctx.lineTo(PX + Math.cos(a) * (r + 12), PY + Math.sin(a) * (r + 12)); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if (v[2] < 0) label('Bajo el horizonte', PX, PY + r + 22, col, '600 12px system-ui', 0.9);
+    return;
+  }
+  // Flecha en el borde que indica hacia dónde girar
+  let dx = x, dy = -y; if (Math.hypot(dx, dy) < 1e-3) dx = 1;
+  const ang = Math.atan2(dy, dx), cx = W / 2, cy = H / 2 - 20;
+  const rx = W / 2 - 46, ry = (H - 300) / 2;
+  const tt = 1 / Math.sqrt((Math.cos(ang) / rx) ** 2 + (Math.sin(ang) / ry) ** 2);
+  const ax = cx + Math.cos(ang) * tt * (0.92 + 0.05 * pulse), ay = cy + Math.sin(ang) * tt * (0.92 + 0.05 * pulse);
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
+  ctx.fillStyle = col; ctx.shadowColor = 'rgba(255,190,90,.7)'; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(-12, -17); ctx.lineTo(-4, 0); ctx.lineTo(-12, 17); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  const away = Math.round(Math.acos(clamp(z, -1, 1)) * R2D);
+  const lx = clamp(ax - Math.cos(ang) * 46, 60, W - 60), ly = clamp(ay - Math.sin(ang) * 40, 120, H - 180);
+  ctx.textAlign = 'center';
+  label(tg.label, lx, ly - 8, col, '600 14px system-ui,sans-serif');
+  label(`a ${away}° de aquí`, lx, ly + 10, rgb(230, 230, 240), '12px system-ui,sans-serif', 0.85);
+}
+
+/* =================== Bucle principal =================== */
+let lastT = performance.now(), statusT = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  if (S.playing) { S.timeOffset += dt * 3600 * 1000; syncSlider(); }
+  frameDate = simDate();
+  if (now - lastBodies > 1000 || S.playing || S.timeDirty) { updateEphemeris(frameDate); lastBodies = now; S.timeDirty = false; }
+  HM = frameMatrix(frameDate);
+  if (S.mode === 'sensor' && OR.has) sensorCamera(dt);
+  else { inertia(dt); setManualCamera(); }
+  const sh = toHor(bodies.sol.vec); sunAltDeg = Math.asin(sh[2]) * R2D;
+  const starDim = skyColors()[2];
+  const t = now / 1000;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBackground(starDim);
+  if (S.show.mw) drawMilkyWay(starDim);
+  if (S.show.grid) drawGrid();
+  drawStars(t, starDim); // calcula posiciones en pantalla (sx, sy)
+  if (S.show.const) drawConstellations(starDim); else constLabelPos = [];
+  drawDSO();
+  drawBodies(t, starDim);
+  drawGround();
+  drawLabels(starDim);
+  drawTarget(t);
+  if (now - statusT > 500) { statusT = now; updateStatus(); }
+  requestAnimationFrame(frame);
+}
+
+/* =================== Interfaz =================== */
+function updateStatus() {
+  const d = frameDate;
+  const live = Math.abs(S.timeOffset) < 60000;
+  const dateStr = d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+  const timeStr = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+  $('tlabel').innerHTML = `<b>${timeStr}</b> <span>${dateStr}${live ? ' · en vivo' : ''}</span>`;
+  const az = Astro.n360(Math.atan2(camF[0], camF[1]) * R2D), alt = Math.asin(clamp(camF[2], -1, 1)) * R2D;
+  let extra = '';
+  if (sunAltDeg > -6) extra = sunAltDeg > 0 ? ' · ☀️ Es de día' : ' · 🌆 Crepúsculo';
+  $('status').innerHTML = `📍 ${S.loc.name} · Mirando al <b>${dirName(az)}</b>, ${Math.round(alt)}° de altura${extra}`;
+}
+let toastTimer;
+function toast(msg, ms = 2600) {
+  const el = $('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+function syncSlider() {
+  const mins = S.timeOffset / 60000;
+  if (Math.abs(mins) <= 720) $('trange').value = Math.round(mins);
+}
+$('trange').addEventListener('input', e => { S.timeOffset = +e.target.value * 60000; S.timeDirty = true; S.playing = false; $('play').classList.remove('on'); });
+$('now').addEventListener('click', () => { S.timeOffset = 0; S.timeDirty = true; S.playing = false; $('play').classList.remove('on'); syncSlider(); });
+$('play').addEventListener('click', () => { S.playing = !S.playing; $('play').classList.toggle('on', S.playing); if (S.playing) toast('Cada segundo avanza 1 hora'); });
+$('bNight').addEventListener('click', () => {
+  S.night = !S.night; document.body.classList.toggle('night', S.night); $('bNight').classList.toggle('on', S.night);
+  document.querySelector('meta[name=theme-color]').content = S.night ? '#100000' : '#02040b';
+});
+$('bLayers').addEventListener('click', () => { $('layers').classList.toggle('show'); $('bLayers').classList.toggle('on'); });
+for (const [id, k] of [['lyConst', 'const'], ['lyNames', 'names'], ['lyMW', 'mw'], ['lyGrid', 'grid']]) $(id).addEventListener('change', e => S.show[k] = e.target.checked);
+$('bSensor').addEventListener('click', () => {
+  if (S.mode === 'sensor') { camToManual(); OR.manualChosen = true; setMode('manual'); }
+  else if (OR.has) { OR.manualChosen = false; setMode('sensor'); }
+  else { requestOrientation().then(() => setTimeout(() => { if (!OR.has) toast('Este dispositivo no tiene sensores de orientación. Arrastra el cielo con el dedo o el mouse.', 3500); }, 1200)); }
+});
+const zoomBy = f => { S.fov = clamp(S.fov * f, 15, 150); updateScale(); };
+$('bZoomIn').addEventListener('click', () => zoomBy(0.8));
+$('bZoomOut').addEventListener('click', () => zoomBy(1.25));
+
+/* ---------- Ficha ---------- */
+function riseSetText(getVec) {
+  // Busca el próximo cruce del horizonte en las próximas 24 h (pasos de 10 min)
+  const base = frameDate.getTime();
+  const altAt = ms => { const d = new Date(ms); const v = Astro.mulMV(Astro.horizonMatrix(Astro.gmst(d) + S.loc.lon, S.loc.lat), getVec(d)); return v[2]; };
+  const a0 = altAt(base);
+  for (let m = 10; m <= 1440; m += 10) {
+    const a = altAt(base + m * 60000);
+    if ((a > 0) !== (a0 > 0)) {
+      const tm = new Date(base + (m - 5) * 60000).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+      return a0 > 0 ? `Se oculta cerca de las ${tm}` : `Sale cerca de las ${tm}`;
+    }
+  }
+  return a0 > 0 ? 'Visible toda la noche (nunca se pone desde aquí)' : 'No sale desde tu ubicación';
+}
+function bodyVecAt(name) {
+  return d => {
+    const T = Astro.centuries(d), P = Astro.precessionMatrix(T);
+    if (name === 'sol') return Astro.sun(T).vec;
+    if (name === 'luna') return Astro.moon(T).vec;
+    return Astro.mulMV(P, Astro.planet(name, T).vec);
+  };
+}
+function lyText(ly) {
+  if (ly >= 1e6) return fmt(ly / 1e6, 1) + ' millones de años luz';
+  return fmt(ly, ly < 20 ? 1 : 0) + ' años luz';
+}
+function showCard(sel) {
+  S.selected = sel;
+  let h = '', facts = [], txt = '', sub = '';
+  const posFacts = v => { const [alt, az] = altAz(v); return [`Altura <b>${Math.round(alt)}°</b>`, `Dirección <b>${dirName(az)}</b>`]; };
+  if (sel.type === 'star') {
+    const st = STARS[sel.i], k = starKey(sel.i), info = KEY_FIRST[k] === sel.i ? STAR_INFO[k] : null;
+    h = starLabel(sel.i);
+    const con = CONST_NAME[st[5]] || st[5] || '';
+    sub = `Estrella ${colorName(st[3] * 100)}${con ? ' · ' + con : ''}${st[4] && starName(sel.i) ? ' · ' + st[4] + ' ' + st[5] : ''}`;
+    facts.push(`Brillo <b>${fmt(st[2], 1)}</b> mag`);
+    if (info && info[1]) facts.push(`Distancia <b>${lyText(info[1])}</b>`);
+    facts.push(`Temperatura <b>~${fmt(Math.round(st[3] * 100 / 100) * 100)} K</b>`);
+    facts.push(...posFacts([ex[sel.i], ey[sel.i], ez[sel.i]]));
+    txt = info ? info[2] : `Una estrella ${colorName(st[3] * 100)} de la constelación ${con || 'desconocida'}. ` +
+      (st[3] * 100 >= 10000 ? 'Su color azulado indica que es mucho más caliente que el Sol.' : st[3] * 100 < 4500 ? 'Su tono anaranjado indica que es más fría que el Sol, probablemente una gigante.' : 'Su temperatura es parecida a la del Sol.') +
+      (st[2] > 4 ? ' Solo se ve desde lugares con poca contaminación lumínica.' : '');
+    sel.label = h;
+    const v = [ex[sel.i], ey[sel.i], ez[sel.i]];
+    facts.push(riseSetText(() => v));
+  } else if (sel.type === 'body') {
+    const b = bodies[sel.name], inf = BODY_INFO[sel.name];
+    h = inf[0]; sub = inf[1]; txt = inf[2];
+    if (sel.name === 'luna') {
+      const el = Math.acos(clamp(dot(bodies.sol.vec, b.vec), -1, 1)), k = (1 - Math.cos(el)) / 2;
+      const waxing = Astro.n360(b.lon - bodies.sol.lon) < 180;
+      const pct = Math.round(k * 100);
+      const ph = pct < 3 ? 'Luna nueva' : pct > 97 ? 'Luna llena' : pct < 40 ? (waxing ? 'Creciente' : 'Menguante') : pct < 60 ? (waxing ? 'Cuarto creciente' : 'Cuarto menguante') : (waxing ? 'Gibosa creciente' : 'Gibosa menguante');
+      sub = `${ph} · ${pct}% iluminada`;
+      facts.push(`Distancia <b>${fmt(Math.round(b.dist))} km</b>`);
+    } else if (sel.name === 'sol') {
+      facts.push(`Distancia <b>${fmt(b.dist * 149.6, 1)} millones de km</b>`);
+    } else {
+      facts.push(`Brillo <b>${fmt(b.mag, 1)}</b> mag`, `Distancia <b>${fmt(b.dist * 149.6, 0)} millones de km</b>`, `Su luz tarda <b>${fmt(b.dist * 8.317, 0)} min</b>`);
+    }
+    facts.push(...posFacts(b.vec), riseSetText(bodyVecAt(sel.name)));
+    sel.label = h;
+  } else if (sel.type === 'const') {
+    const c = sel.c; h = c.n; sub = c.h ? 'Constelación destacada del hemisferio sur' : 'Constelación';
+    txt = (CONST_INFO[c.c] || [''])[0];
+    const v = targetVec(sel); facts.push(...posFacts(v));
+    const brightest = Math.min(...c.l.flat());
+    facts.push(`Estrella más brillante: <b>${starLabel(brightest)}</b>`);
+    sel.label = h;
+  } else if (sel.type === 'dso') {
+    const d = sel.d; h = d[0]; sub = 'Objeto de cielo profundo'; txt = d[5];
+    facts.push(`Distancia <b>${lyText(d[4])}</b>`, ...posFacts(d.vec));
+    sel.label = h;
+  }
+  $('cardBody').innerHTML = `<h2>${h}</h2><div class="sub">${sub}</div><div class="facts">${facts.map(f => `<span>${f}</span>`).join('')}</div><p>${txt}</p>` +
+    (S.target && S.target.label === h ? '' : `<button class="go">🎯 Guiarme hasta aquí</button>`);
+  const go = $('cardBody').querySelector('.go');
+  if (go) go.onclick = () => { setTarget(sel); go.remove(); };
+  $('card').classList.add('show');
+  $('layers').classList.remove('show'); $('bLayers').classList.remove('on');
+}
+function hideCard() { $('card').classList.remove('show'); S.selected = null; }
+document.querySelector('#card .x').addEventListener('click', hideCard);
+
+/* ---------- Búsqueda ---------- */
+let INDEX = [];
+function buildIndex() {
+  INDEX = [];
+  for (const p of ['sol', 'luna', ...PLANETS]) INDEX.push({ label: BODY_INFO[p][0], kind: BODY_INFO[p][1], sel: { type: 'body', name: p }, pri: 0 });
+  for (const c of CONSTS) INDEX.push({ label: c.n, kind: 'Constelación', sel: { type: 'const', c }, pri: 1 });
+  for (const d of DSO) INDEX.push({ label: d[0], kind: 'Cielo profundo', sel: { type: 'dso', d }, pri: 2 });
+  const seen = new Set();
+  for (let i = 0; i < N; i++) {
+    const n = starName(i); if (!n || seen.has(n)) continue; seen.add(n);
+    INDEX.push({ label: n, kind: 'Estrella', sel: { type: 'star', i }, pri: 3, alt: STARS[i][6] });
+  }
+  // sinónimos útiles
+  const syn = [['Tres Marías', 'const', 'Ori'], ['Cinturón de Orión', 'const', 'Ori'], ['Falsa Cruz', 'const', 'Vel'], ['Lucero', 'body', 'venus'], ['Siete Cabrillas', 'dso', 'Pléyades'], ['Spica', 'star', 'α Vir'], ['Sirius', 'star', 'α CMa'], ['Estrella Polar', 'star', 'α UMi'], ['Escorpio', 'const', 'Sco'], ['Escorpion', 'const', 'Sco']];
+  for (const [l, t, k] of syn) {
+    const sel = t === 'const' ? { type: 'const', c: CONST_BY_CODE[k] } : t === 'body' ? { type: 'body', name: k } : t === 'dso' ? { type: 'dso', d: DSO.find(d => d[0] === k) } : { type: 'star', i: KEY_FIRST[k] };
+    INDEX.push({ label: l, kind: 'También llamado', sel, pri: 4 });
+  }
+}
+function search(q) {
+  const n = norm(q); if (!n) return [];
+  return INDEX.map(e => { const L = norm(e.label), A = e.alt ? norm(e.alt) : ''; const p = L.startsWith(n) || A.startsWith(n) ? 0 : (L.includes(n) || A.includes(n)) ? 1 : 9; return [p, e]; })
+    .filter(([p]) => p < 9).sort((a, b) => a[0] - b[0] || a[1].pri - b[1].pri || a[1].label.localeCompare(b[1].label)).slice(0, 8).map(x => x[1]);
+}
+const qIn = $('q'), res = $('results');
+qIn.addEventListener('input', () => {
+  const r = search(qIn.value); $('qclear').style.display = qIn.value ? 'block' : 'none';
+  res.innerHTML = r.map((e, k) => `<button data-k="${k}">${e.label}<span class="k">${e.kind}</span></button>`).join('');
+  res.style.display = r.length ? 'block' : 'none';
+  res.querySelectorAll('button').forEach(b => b.onclick = () => pick(r[+b.dataset.k]));
+});
+qIn.addEventListener('keydown', e => { if (e.key === 'Enter') { const r = search(qIn.value); if (r[0]) pick(r[0]); } });
+$('qclear').addEventListener('click', () => { qIn.value = ''; res.style.display = 'none'; $('qclear').style.display = 'none'; S.target = null; });
+function pick(e) {
+  res.style.display = 'none'; qIn.value = e.sel.type === 'star' ? starName(e.sel.i) : e.label; qIn.blur();
+  setTarget({ ...e.sel }); showCard({ ...e.sel });
+}
+function setTarget(sel) {
+  S.target = sel;
+  sel.label = sel.type === 'star' ? starLabel(sel.i) : sel.type === 'body' ? BODY_INFO[sel.name][0] : sel.type === 'const' ? sel.c.n : sel.d[0];
+  const v = toHor(targetVec(sel));
+  if (S.mode === 'manual') { // en modo manual, girar suavemente hasta el objeto
+    // dejar el objeto en la parte superior de la pantalla, sobre la ficha
+    flyTo = { az: Math.atan2(v[0], v[1]), alt: clamp(Math.asin(clamp(v[2], -1, 1)) - 0.2 * H / scale, -Math.PI / 2, Math.PI / 2) };
+  } else toast(v[2] < 0 ? `${sel.label} está bajo el horizonte ahora. Sigue la flecha igual.` : `Sigue la flecha para encontrar ${sel.label}`);
+}
+
+/* ---------- Tocar y arrastrar ---------- */
+let flyTo = null, vel = [0, 0];
+function inertia(dt) {
+  if (flyTo) {
+    let da = flyTo.az - S.az; da = Math.atan2(Math.sin(da), Math.cos(da));
+    const k = 1 - Math.exp(-dt * 4);
+    S.az += da * k; S.alt += (flyTo.alt - S.alt) * k;
+    if (Math.abs(da) < 0.002 && Math.abs(flyTo.alt - S.alt) < 0.002) flyTo = null;
+  } else if (!drag && (vel[0] || vel[1])) {
+    S.az += vel[0] * dt; S.alt = clamp(S.alt + vel[1] * dt, -Math.PI / 2, Math.PI / 2);
+    const f = Math.exp(-dt * 4); vel = [vel[0] * f, vel[1] * f];
+    if (Math.abs(vel[0]) + Math.abs(vel[1]) < 0.01) vel = [0, 0];
+  }
+}
+const pointers = new Map();
+let drag = null, pinch = null;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false, lt: performance.now() };
+  else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), fov: S.fov }; drag = null; }
+  res.style.display = 'none'; qIn.blur();
+});
+canvas.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    S.fov = clamp(pinch.fov * pinch.d / Math.max(10, Math.hypot(a[0] - b[0], a[1] - b[1])), 15, 150); updateScale(); return;
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) {
+    drag.moved = true;
+    if (S.mode === 'sensor') { camToManual(); OR.manualChosen = true; setMode('manual', true); toast('Modo manual · toca 🧭 para volver a los sensores'); }
+    flyTo = null;
+  }
+  if (drag.moved) {
+    const k = 1 / scale; // radianes por píxel en el centro
+    const now = performance.now(), dtm = Math.max(1, now - drag.lt) / 1000;
+    const daz = -dx * k / Math.max(0.25, Math.cos(S.alt)), dal = dy * k;
+    S.az += daz; S.alt = clamp(S.alt + dal, -Math.PI / 2, Math.PI / 2);
+    vel = [daz / dtm * 0.6, dal / dtm * 0.6]; drag.lt = now;
+  }
+  drag.x = e.clientX; drag.y = e.clientY;
+});
+const endPointer = e => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (drag && !drag.moved && performance.now() - drag.t0 < 500) tap(e.clientX, e.clientY);
+  if (drag && performance.now() - drag.lt > 80) vel = [0, 0];
+  if (pointers.size === 0) drag = null;
+};
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', e => { pointers.delete(e.pointerId); drag = null; pinch = null; });
+canvas.addEventListener('wheel', e => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+
+function tap(x, y) {
+  $('layers').classList.remove('show'); $('bLayers').classList.remove('on');
+  let best = null, bd = 30;
+  for (const name of ['sol', 'luna', ...PLANETS]) {
+    const b = bodies[name]; if (!b.vis) continue;
+    const d = Math.hypot(b.sx - x, b.sy - y) - (name === 'luna' ? 10 : 6);
+    if (d < bd) { bd = d; best = { type: 'body', name }; }
+  }
+  if (!best) {
+    let bs = 1e9;
+    for (let i = 0; i < N; i++) {
+      if (!sVis[i] || STARS[i][2] > 4.8) continue;
+      const d = Math.hypot(sx[i] - x, sy[i] - y);
+      const sc = d + STARS[i][2] * 2.5; // preferir las brillantes
+      if (d < 28 && sc < bs) { bs = sc; best = { type: 'star', i }; }
+    }
+  }
+  if (!best) for (const d of DSO) if (d.vis && Math.hypot(d.sx - x, d.sy - y) < Math.max(26, d[3] * D2R * scale)) { best = { type: 'dso', d }; break; }
+  if (!best && S.show.const) {
+    // constelación: cerca de una de sus líneas o de su nombre
+    let bc = null, bdist = 22;
+    for (const c of CONSTS) for (const poly of c.l) for (let k = 1; k < poly.length; k++) {
+      const a = poly[k - 1], b = poly[k]; if (!sVis[a] || !sVis[b]) continue;
+      const d = segDist(x, y, sx[a], sy[a], sx[b], sy[b]); if (d < bdist) { bdist = d; bc = c; }
+    }
+    for (const [c, lx, ly] of constLabelPos) if (Math.abs(lx - x) < 60 && Math.abs(ly - y) < 16) bc = c;
+    if (bc) best = { type: 'const', c: bc };
+  }
+  if (best) showCard(best); else hideCard();
+}
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
+  if (l > (W + H) ** 2) return 1e9;
+  const t = l ? clamp(((px - ax) * dx + (py - ay) * dy) / l, 0, 1) : 0;
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+}
+
+/* =================== Inicio =================== */
+function requestOrientation() {
+  const D = window.DeviceOrientationEvent;
+  if (D && typeof D.requestPermission === 'function') {
+    return D.requestPermission().then(r => { if (r === 'granted') startSensors(); else toast('Sin permiso de movimiento: arrastra el cielo con el dedo', 3500); }).catch(() => {});
+  }
+  startSensors(); return Promise.resolve();
+}
+let started = false;
+$('start').addEventListener('click', () => {
+  if (started) return; started = true;
+  const p = requestOrientation(); // en iPhone debe llamarse directamente desde el toque
+  try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+  $('intro').classList.add('hide');
+  setTimeout(() => $('intro').remove(), 700);
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      S.loc = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: `Tu ubicación (${fmt(pos.coords.latitude, 2)}°, ${fmt(pos.coords.longitude, 2)}°)` };
+      S.timeDirty = true; toast('Ubicación encontrada ✓');
+    }, () => toast('Usando Villa Alemana, Chile como ubicación', 3200), { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+  } else toast('Usando Villa Alemana, Chile como ubicación', 3200);
+  p.then(() => setTimeout(() => { if (!OR.has) toast('Arrastra el cielo con el dedo o el mouse para explorarlo', 3500); }, 1500));
+});
+// Estrellitas decorativas de la portada
+(function intro() {
+  const c = $('introStars'), x = c.getContext('2d'), d = Math.min(devicePixelRatio || 1, 2);
+  c.width = innerWidth * d; c.height = innerHeight * d;
+  const r = rng(7);
+  for (let i = 0; i < 260; i++) { x.fillStyle = `rgba(220,230,255,${0.2 + r() * 0.7})`; const s = (0.3 + r() ** 3 * 1.4) * d; x.beginPath(); x.arc(r() * c.width, r() * c.height, s, 0, 7); x.fill(); }
+})();
+window.addEventListener('resize', resize);
+resize();
+setMode('manual', true);
+updateEphemeris(simDate());
+buildIndex();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
