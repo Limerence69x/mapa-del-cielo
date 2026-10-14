@@ -9,6 +9,8 @@ Mapa del cielo en vivo para el celular, todo en un solo archivo (`index.html`) y
 - Sin sensores (computador): arrastra con el dedo o el mouse; zoom con dos dedos o la rueda.
 - Si no das la ubicación, usa Villa Alemana, Chile.
 - Buscador con flecha guía, control de tiempo, modo noche rojo y fichas con curiosidades.
+- Estación Espacial Internacional en vivo con sus próximos pasos visibles (órbita descargada de CelesTrak y calculada con satellite.js / SGP4).
+- Lluvias de estrellas: calendario, radiante en el cielo, mejor hora y meteoros animados.
 - Modo cámara (realidad aumentada) y calibración de la brújula apuntando a la Luna, un planeta o una estrella brillante.
 
 ## Datos y precisión
