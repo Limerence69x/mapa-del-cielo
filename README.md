@@ -9,6 +9,7 @@ Mapa del cielo en vivo para el celular, todo en un solo archivo (`index.html`) y
 - Sin sensores (computador): arrastra con el dedo o el mouse; zoom con dos dedos o la rueda.
 - Si no das la ubicación, usa Villa Alemana, Chile.
 - Buscador con flecha guía, control de tiempo, modo noche rojo y fichas con curiosidades.
+- Modo cámara (realidad aumentada) y calibración de la brújula apuntando a la Luna, un planeta o una estrella brillante.
 
 ## Datos y precisión
 - 2.319 estrellas del *Yale Bright Star Catalogue* (todas hasta magnitud 5,3), con precesión a la fecha actual.

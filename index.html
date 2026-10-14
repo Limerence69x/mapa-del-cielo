@@ -97,6 +97,22 @@ body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:graysc
 #layers label{display:flex;align-items:center;gap:10px;font-size:14px;padding:4px 2px}
 #layers input{width:20px;height:20px;accent-color:var(--accent)}
 
+#layers .lbtn{margin-top:4px;padding:10px 12px;border-radius:12px;background:rgba(255,210,122,.14);color:var(--accent);font-size:14px;text-align:left}
+#layers .lbtn.sec{background:rgba(255,255,255,.06);color:var(--muted);margin-top:0}
+#calib{position:fixed;left:10px;right:10px;z-index:22;bottom:calc(150px + env(safe-area-inset-bottom));max-width:540px;margin:0 auto;
+  background:var(--glass-strong);border:1px solid var(--line);border-radius:20px;padding:16px 18px;display:none;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+#calib.show{display:block}
+#calib h3{margin:0 0 6px;font-size:18px;font-weight:600}
+#calib p{margin:0 0 12px;font-size:14px;line-height:1.45;color:var(--muted)}
+#calib p b{color:var(--text)}
+#calib .opts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+#calib .row{display:flex;gap:8px}
+#calib .row button{flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:600}
+#calib .ok{background:linear-gradient(135deg,#ffe3a3,#ffb860);color:#0b1020}
+body.night #calib .ok{background:#5a0c06;color:#ff6a50}
+#calib .cancel{background:rgba(255,255,255,.07);color:var(--muted)}
+@media (min-width:700px){#calib{right:auto;left:20px;bottom:24px;width:380px}}
 #toast{position:fixed;left:50%;top:calc(120px + env(safe-area-inset-top));transform:translate(-50%,-8px);z-index:30;max-width:88vw;
   background:var(--glass-strong);border:1px solid var(--line);border-radius:14px;padding:10px 16px;font-size:14px;text-align:center;
   opacity:0;transition:.3s;pointer-events:none;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
@@ -133,7 +149,10 @@ body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:graysc
   <label><input type="checkbox" id="lyNames" checked> Nombres</label>
   <label><input type="checkbox" id="lyMW" checked> Vía Láctea</label>
   <label><input type="checkbox" id="lyGrid"> Cuadrícula de altura</label>
+  <button class="lbtn" id="bCalib">🎯 Calibrar brújula</button>
+  <button class="lbtn sec" id="bCalibReset" style="display:none">Quitar calibración</button>
 </div>
+<div id="calib"><div id="calibBody"></div></div>
 
 <div id="bottom">
   <div class="panel">
@@ -147,7 +166,7 @@ body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:graysc
       <button id="bSensor"><span class="i">🧭</span><span>Sensores</span></button>
       <button id="bCam"><span class="i">📷</span><span>Cámara</span></button>
       <button id="bNight"><span class="i">🔴</span><span>Modo noche</span></button>
-      <button id="bLayers"><span class="i">✨</span><span>Capas</span></button>
+      <button id="bLayers"><span class="i">⚙️</span><span>Opciones</span></button>
       <button id="bZoomOut"><span class="i">－</span><span>Alejar</span></button>
       <button id="bZoomIn"><span class="i">＋</span><span>Acercar</span></button>
     </div>
@@ -522,7 +541,7 @@ const S = {
   loc: DEFAULT_LOC, timeOffset: 0, playing: false, night: false,
   mode: 'manual', // 'sensor' | 'manual'
   az: 180 * D2R, alt: 35 * D2R, fov: 75, // vista manual (mirando al sur)
-  camera: false,
+  camera: false, calibOff: 0, calib: null,
   show: { const: true, names: true, mw: true, grid: false },
   target: null, selected: null,
 };
@@ -693,7 +712,14 @@ function sensorCamera(dt) {
   camR = [c * X[0] - s * Y[0], c * X[1] - s * Y[1], c * X[2] - s * Y[2]];
   camU = [s * X[0] + c * Y[0], s * X[1] + c * Y[1], s * X[2] + c * Y[2]];
   camF = [-Z[0], -Z[1], -Z[2]];
+  rawF = camF;
+  if (S.calibOff) { // corrección de la brújula hecha con "Calibrar": girar todo en torno a la vertical
+    const c2 = Math.cos(S.calibOff * D2R), s2 = Math.sin(S.calibOff * D2R);
+    const rot = v => [v[0] * c2 + v[1] * s2, -v[0] * s2 + v[1] * c2, v[2]];
+    camR = rot(camR); camU = rot(camU); camF = rot(camF);
+  }
 }
+let rawF = [0, 1, 0];
 const dot4 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
 function setMode(m, quiet) {
   S.mode = m;
@@ -1094,6 +1120,7 @@ function frame(now) {
   drawGround();
   drawLabels(starDim);
   drawTarget(t);
+  if (S.calib) drawCrosshair(t);
   if (now - statusT > 500) { statusT = now; updateStatus(); }
   requestAnimationFrame(frame);
 }
@@ -1177,6 +1204,70 @@ function stopCamera() {
 }
 $('bCam').addEventListener('click', () => S.camera ? stopCamera() : startCamera());
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.camera && video.paused) video.play().catch(() => {}); });
+
+/* ---------- Calibración de la brújula ---------- */
+try { S.calibOff = +(localStorage.getItem('calibOff') || 0) || 0; } catch (e) {}
+function saveCalib() {
+  try { localStorage.setItem('calibOff', String(S.calibOff)); } catch (e) {}
+  $('bCalibReset').style.display = S.calibOff ? 'block' : 'none';
+}
+function drawCrosshair(t) {
+  const x = W / 2, y = H / 2, r = 26 + 3 * Math.sin(t * 3);
+  ctx.strokeStyle = rgb(255, 210, 120, 0.95); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - r - 14, y); ctx.lineTo(x - 8, y); ctx.moveTo(x + 8, y); ctx.lineTo(x + r + 14, y);
+  ctx.moveTo(x, y - r - 14); ctx.lineTo(x, y - 8); ctx.moveTo(x, y + 8); ctx.lineTo(x, y + r + 14);
+  ctx.stroke();
+}
+function calibCandidates() {
+  const out = [];
+  const ok = v => { const [alt] = altAz(v); return alt > 3 && alt < 72; };
+  for (const p of ['luna', ...PLANETS]) if (bodies[p] && ok(bodies[p].vec) && (p === 'luna' || bodies[p].mag < 1.5)) out.push({ label: BODY_INFO[p][0], sel: { type: 'body', name: p } });
+  for (let i = 0; i < N && out.length < 9; i++) {
+    if (STARS[i][2] > 1.6) break;
+    const n = starName(i); if (!n || KEY_FIRST[starKey(i)] !== i) continue;
+    if (ok([ex[i], ey[i], ez[i]])) out.push({ label: n, sel: { type: 'star', i } });
+  }
+  return out;
+}
+function openCalib() {
+  $('layers').classList.remove('show'); $('bLayers').classList.remove('on');
+  hideCard();
+  if (!OR.has) { toast('Para calibrar se necesitan los sensores del celular (brújula). Toca 🧭 primero.', 3800); return; }
+  if (S.mode !== 'sensor') { OR.manualChosen = false; setMode('sensor', true); }
+  const c = calibCandidates();
+  if (!c.length) { toast('Ahora no hay astros brillantes sobre el horizonte para calibrar. Prueba más tarde.', 3800); return; }
+  S.calib = { step: 1 };
+  $('calibBody').innerHTML = `<h3>Calibrar brújula</h3><p>Elige un astro que <b>veas ahora en el cielo real</b>. Lo más fácil es la Luna o un planeta brillante.</p>
+    <div class="opts">${c.map((o, k) => `<button class="chip" data-k="${k}">${o.label}</button>`).join('')}</div>
+    <div class="row"><button class="cancel">Cancelar</button></div>`;
+  $('calibBody').querySelectorAll('.opts button').forEach(b => b.onclick = () => calibStep2(c[+b.dataset.k]));
+  $('calibBody').querySelector('.cancel').onclick = closeCalib;
+  $('calib').classList.add('show');
+}
+function calibStep2(o) {
+  S.calib = { step: 2, sel: o.sel, label: o.label };
+  $('calibBody').innerHTML = `<h3>Apunta a ${o.label}</h3><p>Apunta el celular de modo que <b>${o.label} real</b> quede justo en el centro de la <b>mira dorada</b>${S.camera ? ' (míralo en la imagen de la cámara)' : ''}. Luego toca <b>Listo</b>.</p>
+    <div class="row"><button class="cancel">Cancelar</button><button class="ok">Listo</button></div>`;
+  $('calibBody').querySelector('.cancel').onclick = closeCalib;
+  $('calibBody').querySelector('.ok').onclick = finishCalib;
+}
+function finishCalib() {
+  if (Math.abs(rawF[2]) > 0.96) { toast('El celular apunta demasiado hacia arriba; elige un astro más bajo.', 3500); return; }
+  const [, az] = altAz(targetVec(S.calib.sel));
+  const rawAz = Math.atan2(rawF[0], rawF[1]) * R2D;
+  let off = Astro.n360(az - rawAz); if (off > 180) off -= 360;
+  S.calibOff = Math.round(off * 10) / 10;
+  saveCalib();
+  const label = S.calib.label;
+  closeCalib();
+  toast(`Listo ✓ Brújula corregida en ${fmt(Math.abs(S.calibOff), 0)}° usando ${label}.`, 4000);
+}
+function closeCalib() { S.calib = null; $('calib').classList.remove('show'); }
+$('bCalib').addEventListener('click', openCalib);
+$('bCalibReset').addEventListener('click', () => { S.calibOff = 0; saveCalib(); toast('Calibración eliminada'); });
+saveCalib();
 
 /* ---------- Ficha ---------- */
 function riseSetText(getVec) {
