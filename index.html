@@ -23,6 +23,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 canvas#sky{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:block}
+video#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#000}
+body.camera video#cam{display:block}
+body.camera.night video#cam{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(-50deg) brightness(.55)}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 
 /* ---------- Pantalla inicial ---------- */
@@ -102,6 +105,7 @@ body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:graysc
 </style>
 </head>
 <body>
+<video id="cam" playsinline muted autoplay></video>
 <canvas id="sky"></canvas>
 
 <div id="intro">
@@ -109,7 +113,7 @@ body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:graysc
   <h1>Mapa del <b>Cielo</b></h1>
   <p>Apunta tu celular al cielo y descubre qué estrellas, constelaciones y planetas estás mirando, en tiempo real.</p>
   <button id="start">Comenzar</button>
-  <small>Te pediremos acceso a tu ubicación y a los sensores de movimiento. Si no das la ubicación, usaremos Villa Alemana, Chile.</small>
+  <small>Te pediremos acceso a tu ubicación y a los sensores de movimiento. Con el botón 📷 Cámara puedes ver las estrellas sobre la imagen real del cielo. Si no das la ubicación, usaremos Villa Alemana, Chile.</small>
 </div>
 
 <div id="top">
@@ -141,6 +145,7 @@ body.night .i,body.night .go,body.night #status,body.night #tlabel{filter:graysc
     <input id="trange" type="range" min="-720" max="720" step="5" value="0" aria-label="Adelantar o retroceder el tiempo">
     <div class="btns">
       <button id="bSensor"><span class="i">🧭</span><span>Sensores</span></button>
+      <button id="bCam"><span class="i">📷</span><span>Cámara</span></button>
       <button id="bNight"><span class="i">🔴</span><span>Modo noche</span></button>
       <button id="bLayers"><span class="i">✨</span><span>Capas</span></button>
       <button id="bZoomOut"><span class="i">－</span><span>Alejar</span></button>
@@ -517,6 +522,7 @@ const S = {
   loc: DEFAULT_LOC, timeOffset: 0, playing: false, night: false,
   mode: 'manual', // 'sensor' | 'manual'
   az: 180 * D2R, alt: 35 * D2R, fov: 75, // vista manual (mirando al sur)
+  camera: false,
   show: { const: true, names: true, mw: true, grid: false },
   target: null, selected: null,
 };
@@ -756,6 +762,11 @@ function skyColors() {
   return [top, bot, 1 - 0.75 * clamp((s + 12) / 12, 0, 1)];
 }
 function drawBackground(starDim) {
+  if (S.camera) { // el video de la cámara queda detrás; solo un velo para que resalten las estrellas
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = rgb(0, 4, 20, 0.28); ctx.fillRect(0, 0, W, H);
+    return;
+  }
   const [top, bot] = skyColors();
   // El degradado se orienta según dónde está el horizonte en pantalla
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -800,7 +811,7 @@ function drawGround() {
   path.closePath();
   const nadirVisible = project([0, 0, -1]);
   const nadirInside = nadirVisible && ctx.isPointInPath(path, PX * DPR, PY * DPR);
-  ctx.fillStyle = rgb(4, 7, 12, 0.62);
+  ctx.fillStyle = rgb(4, 7, 12, S.camera ? 0.3 : 0.62);
   if (nadirInside) ctx.fill(path);
   else { const p2 = new Path2D(); p2.rect(-10, -10, W + 20, H + 20); p2.addPath(path); ctx.fill(p2, 'evenodd'); }
   // línea de horizonte
@@ -1074,7 +1085,7 @@ function frame(now) {
   const t = now / 1000;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   drawBackground(starDim);
-  if (S.show.mw) drawMilkyWay(starDim);
+  if (S.show.mw) drawMilkyWay(starDim * (S.camera ? 0.5 : 1));
   if (S.show.grid) drawGrid();
   drawStars(t, starDim); // calcula posiciones en pantalla (sx, sy)
   if (S.show.const) drawConstellations(starDim); else constLabelPos = [];
@@ -1125,6 +1136,47 @@ $('bSensor').addEventListener('click', () => {
 const zoomBy = f => { S.fov = clamp(S.fov * f, 15, 150); updateScale(); };
 $('bZoomIn').addEventListener('click', () => zoomBy(0.8));
 $('bZoomOut').addEventListener('click', () => zoomBy(1.25));
+
+/* ---------- Cámara (realidad aumentada) ---------- */
+const video = $('cam');
+let camStream = null;
+function cameraFov() {
+  // Campo de visión aproximado de la cámara principal (~66° en su lado largo), ajustado al recorte en pantalla
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return 62;
+  const s = Math.max(W / vw, H / vh);
+  const f = (Math.max(vw, vh) / 2) / Math.tan(33 * D2R);
+  return 2 * Math.atan((Math.max(W, H) / s / 2) / f) * R2D;
+}
+async function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('Este navegador no permite usar la cámara. Abre la página con https en Safari o Chrome.', 4000); return;
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' } } });
+  } catch (e) {
+    toast(e && e.name === 'NotAllowedError' ? 'Sin permiso de cámara. Actívalo en los ajustes del navegador para este sitio.' : 'No se pudo abrir la cámara.', 4500);
+    return;
+  }
+  video.srcObject = camStream;
+  try { await video.play(); } catch (e) {}
+  S.camera = true; document.body.classList.add('camera'); $('bCam').classList.add('on');
+  const fit = () => { S.fov = clamp(cameraFov(), 30, 100); updateScale(); };
+  if (video.videoWidth) fit(); else video.addEventListener('loadedmetadata', fit, { once: true });
+  if (S.mode !== 'sensor') {
+    if (OR.has) { OR.manualChosen = false; setMode('sensor', true); }
+    else requestOrientation();
+  }
+  toast('Apunta la cámara al cielo. Si no calza exacto, ajusta con dos dedos.', 4000);
+}
+function stopCamera() {
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null; video.srcObject = null;
+  S.camera = false; document.body.classList.remove('camera'); $('bCam').classList.remove('on');
+  S.fov = 75; updateScale();
+}
+$('bCam').addEventListener('click', () => S.camera ? stopCamera() : startCamera());
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.camera && video.paused) video.play().catch(() => {}); });
 
 /* ---------- Ficha ---------- */
 function riseSetText(getVec) {
